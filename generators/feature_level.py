@@ -4,7 +4,7 @@ One row per (usage_date, user, feature).
 No nested arrays — simplest table to populate.
 """
 from datetime import date
-from .utils import date_range, jitter, acceptance_subset, validate_row, _sql_val
+from .utils import date_range, jitter, acceptance_subset, validate_row, _sql_val, trend_base, day_scale, expand_users, active_user_count
 
 
 TABLE = "enterprise_user_feature_level_copilot_metrics"
@@ -65,13 +65,19 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
     Returns a list of complete INSERT SQL statements, one per batch of rows.
     """
     ent = entities["enterprise"]
-    base = story["per_user_per_day"]
     noise = story.get("noise_pct", 0)
     active_features = story["active_features"]
+    all_users = expand_users(entities, story)
 
     value_lines = []
     for d in date_range(story["start_date"], story["end_date"]):
-        for user in entities["users"]:
+        scale = day_scale(d, story)
+        if scale == 0.0:
+            continue
+        base = trend_base(story, d)
+        scaled = {k: max(0, round(v * scale)) for k, v in base.items()}
+        n = active_user_count(d, story, len(all_users))
+        for user in all_users[:n]:
             for i, feature in enumerate(active_features):
                 seed = hash((str(d), user["id"], feature)) % 100000
                 _, sql = _row_values(
@@ -82,7 +88,7 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                     user_login=user["login"],
                     assignee_login=user["assignee_login"],
                     feature=feature,
-                    base=base,
+                    base=scaled,
                     noise_pct=noise,
                     seed=seed,
                 )

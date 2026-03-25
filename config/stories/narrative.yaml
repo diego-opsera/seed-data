@@ -1,0 +1,50 @@
+name: "narrative"
+start_date: "2025-03-25"
+end_date: "2026-03-25"
+
+# Trend: values ramp linearly from start to end over the year.
+per_user_per_day_start:
+  code_generation_activity_count: 15
+  user_initiated_interaction_count: 5
+  loc_suggested_to_add: 75
+  loc_suggested_to_delete: 8
+
+per_user_per_day_end:
+  code_generation_activity_count: 70
+  user_initiated_interaction_count: 25
+  loc_suggested_to_add: 300
+  loc_suggested_to_delete: 30
+
+noise_pct: 15
+
+# User count grows from 5 to 100 over the year with noise (expect natural monthly dips)
+user_count_start: 5
+user_count_end: 100
+user_count_noise_pct: 25
+
+# Day scaling
+weekend_multiplier: 0.0
+holiday_multiplier: 0.05
+
+# Emergency weekend: on-call incident 3 weeks back
+emergency_weekend_start: "2026-03-07"
+emergency_weekend_multiplier: 0.25
+
+# Full vacation shutdowns
+vacation_periods:
+  - start: "2025-11-24"
+    end:   "2025-11-28"   # Thanksgiving week (Mon–Fri)
+  - start: "2025-12-22"
+    end:   "2025-12-31"   # Final two weeks of December
+
+# IDE assignment for named users (auto-generated users get distributed by index)
+user_ide_map:
+  demo-alice: vscode
+  demo-bob:   intellij
+  demo-carol: vscode
+
+active_features:
+  - code_completion
+  - chat_panel_ask_mode
+  - chat_panel_edit_mode
+  - agent_edit

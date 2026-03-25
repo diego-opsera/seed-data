@@ -3,7 +3,7 @@ Generator for enterprise_user_language_model_level_copilot_metrics.
 One row per (usage_date, user, language, model). No nested arrays.
 """
 from datetime import date
-from .utils import date_range, jitter, acceptance_subset, validate_row, _sql_val
+from .utils import date_range, jitter, acceptance_subset, validate_row, _sql_val, trend_base, day_scale, expand_users, active_user_count
 
 
 TABLE = "enterprise_user_language_model_level_copilot_metrics"
@@ -21,24 +21,28 @@ VALUES
 
 def generate(catalog: str, entities: dict, story: dict) -> list[str]:
     ent = entities["enterprise"]
-    base = story["per_user_per_day"]
     noise = story.get("noise_pct", 0)
-
     languages = entities["languages"]
     models = entities["models"]
-    # Each user gets one primary language and one primary model for simplicity
-    # Rotate assignments across users so there's variety
+    all_users = expand_users(entities, story)
+
     value_lines = []
     for d in date_range(story["start_date"], story["end_date"]):
-        for i, user in enumerate(entities["users"]):
+        scale = day_scale(d, story)
+        if scale == 0.0:
+            continue
+        base = trend_base(story, d)
+        scaled = {k: max(0, round(v * scale)) for k, v in base.items()}
+        n = active_user_count(d, story, len(all_users))
+        for i, user in enumerate(all_users[:n]):
             language = languages[i % len(languages)]
             model = models[i % len(models)]
             seed = hash((str(d), user["id"], language, model)) % 100000
 
-            code_gen = jitter(base["code_generation_activity_count"], noise, seed)
+            code_gen = jitter(scaled["code_generation_activity_count"], noise, seed)
             code_acc = acceptance_subset(code_gen, 0.45)
-            loc_sugg_add = jitter(base["loc_suggested_to_add"], noise, seed + 1)
-            loc_sugg_del = jitter(base["loc_suggested_to_delete"], noise, seed + 2)
+            loc_sugg_add = jitter(scaled["loc_suggested_to_add"], noise, seed + 1)
+            loc_sugg_del = jitter(scaled["loc_suggested_to_delete"], noise, seed + 2)
             loc_add = acceptance_subset(loc_sugg_add, 0.45)
             loc_del = acceptance_subset(loc_sugg_del, 0.45)
 

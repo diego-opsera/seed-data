@@ -39,8 +39,6 @@ def generate(catalog: str, entities: dict, story: dict, user_rows: list[dict]) -
     active_features = story["active_features"]
     languages = entities["languages"]
     models = entities["models"]
-    users = entities["users"]
-    user_ide_map = story["user_ide_map"]
 
     # Group user rows by date
     by_date: dict[str, list[dict]] = {}
@@ -53,6 +51,8 @@ def generate(catalog: str, entities: dict, story: dict, user_rows: list[dict]) -
     for d in date_range(story["start_date"], story["end_date"]):
         d_str = str(d)
         day_rows = by_date.get(d_str, [])
+        if not day_rows:
+            continue
 
         # Aggregate scalar totals across all users for this day
         total_code_gen = sum(r["code_generation_activity_count"] for r in day_rows)
@@ -63,21 +63,20 @@ def generate(catalog: str, entities: dict, story: dict, user_rows: list[dict]) -
         total_loc_sugg_del = sum(r["loc_suggested_to_delete_sum"] for r in day_rows)
         total_interactions = sum(r["user_initiated_interaction_count"] for r in day_rows)
 
-        n_users = len(users)
-        daily_active = n_users
-        weekly_active = n_users
-        monthly_active = n_users
+        daily_active = len(day_rows)
+        weekly_active = len(day_rows)
+        monthly_active = len(day_rows)
         monthly_chat = sum(1 for r in day_rows if r.get("used_chat"))
-        monthly_agent = 0  # Phase 1: no agent usage
+        monthly_agent = 0
 
-        # Build nested arrays — one entry per IDE used across users
-        ides_used = list({user_ide_map.get(u["login"], "vscode") for u in users})
+        # Build nested arrays — one entry per IDE present in today's rows
+        ides_used = list({r["ide"] for r in day_rows})
         ide_entries = []
         for ide in ides_used:
-            ide_users = [r for r in day_rows if r.get("ide") == ide]
-            ide_gen = sum(r["code_generation_activity_count"] for r in ide_users) or total_code_gen // len(ides_used)
-            ide_acc = sum(r["code_acceptance_activity_count"] for r in ide_users) or total_code_acc // len(ides_used)
-            ide_interactions = sum(r["user_initiated_interaction_count"] for r in ide_users) or total_interactions // len(ides_used)
+            ide_rows = [r for r in day_rows if r["ide"] == ide]
+            ide_gen = sum(r["code_generation_activity_count"] for r in ide_rows)
+            ide_acc = sum(r["code_acceptance_activity_count"] for r in ide_rows)
+            ide_interactions = sum(r["user_initiated_interaction_count"] for r in ide_rows)
             ide_entries.append(totals_by_ide_entry_enterprise(
                 ide=ide,
                 code_gen=ide_gen,

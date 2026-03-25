@@ -11,6 +11,134 @@ from typing import Any
 
 
 # ---------------------------------------------------------------------------
+# US holidays 2025-2026 (major federal + commonly observed)
+# ---------------------------------------------------------------------------
+
+US_HOLIDAYS = frozenset({
+    date(2025, 5, 26),   # Memorial Day
+    date(2025, 7, 4),    # Independence Day
+    date(2025, 9, 1),    # Labor Day
+    date(2025, 11, 11),  # Veterans Day
+    date(2025, 11, 27),  # Thanksgiving
+    date(2025, 11, 28),  # Day after Thanksgiving
+    date(2025, 12, 24),  # Christmas Eve
+    date(2025, 12, 25),  # Christmas
+    date(2025, 12, 26),  # Day after Christmas
+    date(2026, 1, 1),    # New Year's Day
+    date(2026, 1, 19),   # MLK Day
+    date(2026, 2, 16),   # Presidents Day
+})
+
+
+# ---------------------------------------------------------------------------
+# Trend / day scaling
+# ---------------------------------------------------------------------------
+
+def lerp(a: float, b: float, t: float) -> float:
+    """Linear interpolation between a and b at position t (0..1)."""
+    return a + (b - a) * t
+
+
+def trend_base(story: dict, d: date) -> dict:
+    """
+    Return per_user_per_day values interpolated over the date range.
+    Falls back to static per_user_per_day if no start/end values provided.
+    """
+    if "per_user_per_day_start" not in story:
+        return story["per_user_per_day"]
+    start = date.fromisoformat(story["start_date"])
+    end = date.fromisoformat(story["end_date"])
+    total_days = max((end - start).days, 1)
+    t = max(0.0, min(1.0, (d - start).days / total_days))
+    s = story["per_user_per_day_start"]
+    e = story["per_user_per_day_end"]
+    return {k: max(1, round(lerp(s[k], e[k], t))) for k in s}
+
+
+def day_scale(d: date, story: dict) -> float:
+    """
+    Return a 0.0–1.0 activity multiplier for a given date.
+    Returns 1.0 for all days if the story has no day-scaling config.
+    """
+    if "weekend_multiplier" not in story:
+        return 1.0
+
+    # Vacation periods: full shutdown (checked before holiday/weekend logic)
+    for period in story.get("vacation_periods", []):
+        vstart = date.fromisoformat(period["start"])
+        vend = date.fromisoformat(period["end"])
+        if vstart <= d <= vend:
+            return 0.0
+
+    if d in US_HOLIDAYS:
+        return story.get("holiday_multiplier", 0.05)
+
+    if d.weekday() >= 5:  # Saturday=5, Sunday=6
+        emergency_str = story.get("emergency_weekend_start")
+        if emergency_str:
+            ew = date.fromisoformat(emergency_str)
+            if d == ew or d == ew + timedelta(days=1):
+                return story.get("emergency_weekend_multiplier", 0.25)
+        return story.get("weekend_multiplier", 0.0)
+
+    return 1.0
+
+
+# ---------------------------------------------------------------------------
+# User expansion and active user count
+# ---------------------------------------------------------------------------
+
+# IDE distribution for auto-generated users: 60% vscode, 30% intellij, 10% visualstudio
+_IDE_POOL = ["vscode"] * 6 + ["intellij"] * 3 + ["visualstudio"] * 1
+
+
+def default_ide(user_index: int) -> str:
+    return _IDE_POOL[user_index % len(_IDE_POOL)]
+
+
+def expand_users(entities: dict, story: dict) -> list[dict]:
+    """
+    Return the full user list for this story.
+    Auto-generates users beyond the base entities list up to user_count_end.
+    """
+    base = entities["users"]
+    target = story.get("user_count_end", len(base))
+    if target <= len(base):
+        return list(base)
+    users = list(base)
+    for i in range(len(base), target):
+        n = i + 1
+        num = str(n).zfill(3)
+        users.append({
+            "id": 9990000 + n,
+            "login": f"demo-user-{num}",
+            "assignee_login": f"demo-user-{num}",
+            "team": "demo-backend" if n % 3 != 0 else "demo-frontend",
+        })
+    return users
+
+
+def active_user_count(d: date, story: dict, total_users: int) -> int:
+    """
+    Return how many users are active in the month containing d.
+    Uses monthly granularity with noise so counts are stable within a month.
+    Returns total_users if no user_count config is present.
+    """
+    if "user_count_start" not in story:
+        return total_users
+    start = date.fromisoformat(story["start_date"])
+    end = date.fromisoformat(story["end_date"])
+    total_days = max((end - start).days, 1)
+    month_anchor = date(d.year, d.month, 1)
+    t = max(0.0, min(1.0, (month_anchor - start).days / total_days))
+    base_count = lerp(story["user_count_start"], story["user_count_end"], t)
+    noise_pct = story.get("user_count_noise_pct", 0)
+    seed = d.year * 100 + d.month
+    count = jitter(round(base_count), noise_pct, seed)
+    return max(1, min(count, total_users))
+
+
+# ---------------------------------------------------------------------------
 # Date helpers
 # ---------------------------------------------------------------------------
 

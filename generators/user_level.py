@@ -5,7 +5,7 @@ One row per (usage_date, user) with five nested ARRAY<STRUCT> columns.
 from datetime import date
 from .utils import (
     date_range, jitter, acceptance_subset, split_across, validate_row, _sql_val,
-    sql_array,
+    sql_array, trend_base, day_scale, expand_users, active_user_count, default_ide,
     totals_by_feature_entry,
     totals_by_ide_entry,
     totals_by_language_feature_entry,
@@ -117,63 +117,102 @@ def _build_arrays(
     )
 
 
-def generate(catalog: str, entities: dict, story: dict) -> list[str]:
-    ent = entities["enterprise"]
-    base = story["per_user_per_day"]
+def _compute_values(d: date, user: dict, i: int, entities: dict, story: dict) -> dict | None:
+    """
+    Compute scalar values for one user-day.
+    Returns None if the day should be skipped (scale == 0).
+    """
+    scale = day_scale(d, story)
+    if scale == 0.0:
+        return None
+
+    base = trend_base(story, d)
+    scaled = {k: max(0, round(v * scale)) for k, v in base.items()}
     noise = story.get("noise_pct", 0)
-    active_features = story["active_features"]
-    user_ide_map = story["user_ide_map"]
+    seed = hash((str(d), user["id"])) % 100000
+
     languages = entities["languages"]
     models = entities["models"]
+    user_ide_map = story.get("user_ide_map", {})
+
+    code_gen = jitter(scaled["code_generation_activity_count"], noise, seed)
+    code_acc = acceptance_subset(code_gen, 0.45)
+    loc_sugg_add = jitter(scaled["loc_suggested_to_add"], noise, seed + 1)
+    loc_sugg_del = jitter(scaled["loc_suggested_to_delete"], noise, seed + 2)
+    loc_add = acceptance_subset(loc_sugg_add, 0.45)
+    loc_del = acceptance_subset(loc_sugg_del, 0.45)
+    interactions = jitter(scaled["user_initiated_interaction_count"], noise, seed + 3)
+
+    return {
+        "usage_date": str(d),
+        "user_id": user["id"],
+        "ide": user_ide_map.get(user["login"]) or default_ide(i),
+        "language": languages[i % len(languages)],
+        "model": models[i % len(models)],
+        "code_generation_activity_count": code_gen,
+        "code_acceptance_activity_count": code_acc,
+        "loc_suggested_to_add_sum": loc_sugg_add,
+        "loc_suggested_to_delete_sum": loc_sugg_del,
+        "loc_added_sum": loc_add,
+        "loc_deleted_sum": loc_del,
+        "user_initiated_interaction_count": interactions,
+        "used_chat": interactions > 0,
+    }
+
+
+def build_user_row_dicts(entities: dict, story: dict) -> list[dict]:
+    """
+    Build plain dicts for all active user-days.
+    Used by enterprise_level.generate() to aggregate totals consistently.
+    """
+    all_users = expand_users(entities, story)
+    rows = []
+    for d in date_range(story["start_date"], story["end_date"]):
+        n = active_user_count(d, story, len(all_users))
+        for i, user in enumerate(all_users[:n]):
+            row = _compute_values(d, user, i, entities, story)
+            if row is not None:
+                rows.append(row)
+    return rows
+
+
+def generate(catalog: str, entities: dict, story: dict) -> list[str]:
+    ent = entities["enterprise"]
+    active_features = story["active_features"]
+    all_users = expand_users(entities, story)
 
     value_lines = []
     for d in date_range(story["start_date"], story["end_date"]):
+        n = active_user_count(d, story, len(all_users))
         sampled_at = f"{d}T00:00:00.000Z"
-        for i, user in enumerate(entities["users"]):
-            ide = user_ide_map.get(user["login"], "vscode")
-            language = languages[i % len(languages)]
-            model = models[i % len(models)]
-            seed = hash((str(d), user["id"])) % 100000
+        for i, user in enumerate(all_users[:n]):
+            vals = _compute_values(d, user, i, entities, story)
+            if vals is None:
+                continue
 
-            code_gen = jitter(base["code_generation_activity_count"], noise, seed)
-            code_acc = acceptance_subset(code_gen, 0.45)
-            loc_sugg_add = jitter(base["loc_suggested_to_add"], noise, seed + 1)
-            loc_sugg_del = jitter(base["loc_suggested_to_delete"], noise, seed + 2)
-            loc_add = acceptance_subset(loc_sugg_add, 0.45)
-            loc_del = acceptance_subset(loc_sugg_del, 0.45)
-            interactions = jitter(base["user_initiated_interaction_count"], noise, seed + 3)
+            validate_row(vals, TABLE)
             used_agent = "FALSE"
-            used_chat = "TRUE" if interactions > 0 else "FALSE"
-
-            row = {
-                "code_generation_activity_count": code_gen,
-                "code_acceptance_activity_count": code_acc,
-                "loc_suggested_to_add_sum": loc_sugg_add,
-                "loc_suggested_to_delete_sum": loc_sugg_del,
-                "loc_added_sum": loc_add,
-                "loc_deleted_sum": loc_del,
-            }
-            validate_row(row, TABLE)
+            used_chat = "TRUE" if vals["used_chat"] else "FALSE"
 
             arr_ide, arr_feat, arr_lang_feat, arr_lang_model, arr_model_feat = _build_arrays(
-                ide=ide,
+                ide=vals["ide"],
                 active_features=active_features,
-                language=language,
-                model=model,
-                code_gen=code_gen,
-                code_acc=code_acc,
-                interactions=interactions,
-                accepted_loc=loc_add,
-                generated_loc=loc_sugg_add,
+                language=vals["language"],
+                model=vals["model"],
+                code_gen=vals["code_generation_activity_count"],
+                code_acc=vals["code_acceptance_activity_count"],
+                interactions=vals["user_initiated_interaction_count"],
+                accepted_loc=vals["loc_added_sum"],
+                generated_loc=vals["loc_suggested_to_add_sum"],
                 sampled_at=sampled_at,
             )
 
             value_lines.append(
                 f"  ({_sql_val(d)}, {ent['id']}, {_sql_val(ent['name'])}, "
                 f"{user['id']}, {_sql_val(user['login'])}, {_sql_val(user['assignee_login'])}, "
-                f"{interactions}, {code_gen}, {code_acc}, "
+                f"{vals['user_initiated_interaction_count']}, {vals['code_generation_activity_count']}, {vals['code_acceptance_activity_count']}, "
                 f"{used_agent}, {used_chat}, "
-                f"{loc_sugg_add}, {loc_sugg_del}, {loc_del}, {loc_add}, "
+                f"{vals['loc_suggested_to_add_sum']}, {vals['loc_suggested_to_delete_sum']}, {vals['loc_deleted_sum']}, {vals['loc_added_sum']}, "
                 f"{arr_ide}, {arr_feat}, {arr_lang_feat}, {arr_lang_model}, {arr_model_feat})"
             )
 
