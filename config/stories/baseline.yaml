@@ -1,0 +1,29 @@
+# Phase 1 smoke test — flat numbers, no narrative trend, just structural validity
+name: "baseline"
+start_date: "2025-01-01"
+end_date: "2025-01-07"
+
+# Per-user per-day base values (before noise is applied)
+# Phase 1: static. Phase 2: these become trend curve anchors.
+per_user_per_day:
+  code_generation_activity_count: 40
+  code_acceptance_activity_count: 18   # ~45% acceptance rate
+  user_initiated_interaction_count: 12
+  loc_suggested_to_add: 200
+  loc_suggested_to_delete: 20
+  loc_added: 90                        # accepted lines added
+  loc_deleted: 9
+
+# Which IDE each user primarily uses (index into entities.yaml ides list)
+user_ide_map:
+  demo-alice: vscode
+  demo-bob:   intellij
+  demo-carol: vscode
+
+# Which features are active in this story (subset of all features)
+active_features:
+  - code_completion
+  - chat_panel_ask_mode
+
+# Noise factor: ±N% random daily variance (0 = perfectly flat)
+noise_pct: 0

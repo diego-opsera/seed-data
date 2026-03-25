@@ -1,0 +1,63 @@
+# Fake demo enterprise — safe to insert/delete in any environment
+enterprise:
+  id: 999999
+  name: "demo-acme-corp"
+
+orgs:
+  - id: 9990001
+    name: "demo-acme-engineering"
+
+teams:
+  - name: "demo-backend"
+    slug: "demo-backend"
+    org_name: "demo-acme-engineering"
+  - name: "demo-frontend"
+    slug: "demo-frontend"
+    org_name: "demo-acme-engineering"
+
+users:
+  - id: 9990001
+    login: "demo-alice"
+    assignee_login: "demo-alice"
+    team: "demo-backend"
+  - id: 9990002
+    login: "demo-bob"
+    assignee_login: "demo-bob"
+    team: "demo-backend"
+  - id: 9990003
+    login: "demo-carol"
+    assignee_login: "demo-carol"
+    team: "demo-frontend"
+
+# Enum values confirmed from opsera_uat exploration
+ides:
+  - vscode
+  - intellij
+  - visualstudio
+  - eclipse
+  - xcode
+
+features:
+  - code_completion
+  - chat_panel_ask_mode
+  - chat_panel_edit_mode
+  - agent_edit
+  - chat_inline
+  - chat_panel_agent_mode
+  - chat_panel_custom_mode
+  - chat_panel_unknown_mode
+
+languages:
+  - python
+  - javascript
+  - typescript
+  - java
+  - go
+
+models:
+  - gpt-4o
+  - gpt-4o-mini
+  - claude-3.7-sonnet
+  - claude-4.0-sonnet
+  - claude-4.5-sonnet
+  - o3-mini

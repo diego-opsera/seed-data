@@ -1,0 +1,28 @@
+INSERT INTO playground_prod.base_datasets.enterprise_user_ide_level_copilot_metrics
+  (usage_date, enterprise_id, enterprise, user_id, user_login, assignee_login,
+   ide, user_initiated_interaction_count, accepted_loc_sum, generated_loc_sum,
+   code_acceptance_activity_count, code_generation_activity_count,
+   loc_added_sum, loc_deleted_sum, loc_suggested_to_add_sum, loc_suggested_to_delete_sum,
+   last_known_plugin_version)
+VALUES
+  (DATE '2025-01-01', 999999, 'demo-acme-corp', 9990001, 'demo-alice', 'demo-alice', 'vscode', 12, 90, 200, 18, 40, 90, 9, 200, 20, NAMED_STRUCT('plugin', 'copilot-chat', 'plugin_version', '0.28.5', 'sampled_at', '2025-01-01T00:00:00Z')),
+  (DATE '2025-01-01', 999999, 'demo-acme-corp', 9990002, 'demo-bob', 'demo-bob', 'intellij', 12, 90, 200, 18, 40, 90, 9, 200, 20, NAMED_STRUCT('plugin', 'copilot', 'plugin_version', '1.5.10.6', 'sampled_at', '2025-01-01T00:00:00Z')),
+  (DATE '2025-01-01', 999999, 'demo-acme-corp', 9990003, 'demo-carol', 'demo-carol', 'vscode', 12, 90, 200, 18, 40, 90, 9, 200, 20, NAMED_STRUCT('plugin', 'copilot-chat', 'plugin_version', '0.28.5', 'sampled_at', '2025-01-01T00:00:00Z')),
+  (DATE '2025-01-02', 999999, 'demo-acme-corp', 9990001, 'demo-alice', 'demo-alice', 'vscode', 12, 90, 200, 18, 40, 90, 9, 200, 20, NAMED_STRUCT('plugin', 'copilot-chat', 'plugin_version', '0.28.5', 'sampled_at', '2025-01-02T00:00:00Z')),
+  (DATE '2025-01-02', 999999, 'demo-acme-corp', 9990002, 'demo-bob', 'demo-bob', 'intellij', 12, 90, 200, 18, 40, 90, 9, 200, 20, NAMED_STRUCT('plugin', 'copilot', 'plugin_version', '1.5.10.6', 'sampled_at', '2025-01-02T00:00:00Z')),
+  (DATE '2025-01-02', 999999, 'demo-acme-corp', 9990003, 'demo-carol', 'demo-carol', 'vscode', 12, 90, 200, 18, 40, 90, 9, 200, 20, NAMED_STRUCT('plugin', 'copilot-chat', 'plugin_version', '0.28.5', 'sampled_at', '2025-01-02T00:00:00Z')),
+  (DATE '2025-01-03', 999999, 'demo-acme-corp', 9990001, 'demo-alice', 'demo-alice', 'vscode', 12, 90, 200, 18, 40, 90, 9, 200, 20, NAMED_STRUCT('plugin', 'copilot-chat', 'plugin_version', '0.28.5', 'sampled_at', '2025-01-03T00:00:00Z')),
+  (DATE '2025-01-03', 999999, 'demo-acme-corp', 9990002, 'demo-bob', 'demo-bob', 'intellij', 12, 90, 200, 18, 40, 90, 9, 200, 20, NAMED_STRUCT('plugin', 'copilot', 'plugin_version', '1.5.10.6', 'sampled_at', '2025-01-03T00:00:00Z')),
+  (DATE '2025-01-03', 999999, 'demo-acme-corp', 9990003, 'demo-carol', 'demo-carol', 'vscode', 12, 90, 200, 18, 40, 90, 9, 200, 20, NAMED_STRUCT('plugin', 'copilot-chat', 'plugin_version', '0.28.5', 'sampled_at', '2025-01-03T00:00:00Z')),
+  (DATE '2025-01-04', 999999, 'demo-acme-corp', 9990001, 'demo-alice', 'demo-alice', 'vscode', 12, 90, 200, 18, 40, 90, 9, 200, 20, NAMED_STRUCT('plugin', 'copilot-chat', 'plugin_version', '0.28.5', 'sampled_at', '2025-01-04T00:00:00Z')),
+  (DATE '2025-01-04', 999999, 'demo-acme-corp', 9990002, 'demo-bob', 'demo-bob', 'intellij', 12, 90, 200, 18, 40, 90, 9, 200, 20, NAMED_STRUCT('plugin', 'copilot', 'plugin_version', '1.5.10.6', 'sampled_at', '2025-01-04T00:00:00Z')),
+  (DATE '2025-01-04', 999999, 'demo-acme-corp', 9990003, 'demo-carol', 'demo-carol', 'vscode', 12, 90, 200, 18, 40, 90, 9, 200, 20, NAMED_STRUCT('plugin', 'copilot-chat', 'plugin_version', '0.28.5', 'sampled_at', '2025-01-04T00:00:00Z')),
+  (DATE '2025-01-05', 999999, 'demo-acme-corp', 9990001, 'demo-alice', 'demo-alice', 'vscode', 12, 90, 200, 18, 40, 90, 9, 200, 20, NAMED_STRUCT('plugin', 'copilot-chat', 'plugin_version', '0.28.5', 'sampled_at', '2025-01-05T00:00:00Z')),
+  (DATE '2025-01-05', 999999, 'demo-acme-corp', 9990002, 'demo-bob', 'demo-bob', 'intellij', 12, 90, 200, 18, 40, 90, 9, 200, 20, NAMED_STRUCT('plugin', 'copilot', 'plugin_version', '1.5.10.6', 'sampled_at', '2025-01-05T00:00:00Z')),
+  (DATE '2025-01-05', 999999, 'demo-acme-corp', 9990003, 'demo-carol', 'demo-carol', 'vscode', 12, 90, 200, 18, 40, 90, 9, 200, 20, NAMED_STRUCT('plugin', 'copilot-chat', 'plugin_version', '0.28.5', 'sampled_at', '2025-01-05T00:00:00Z')),
+  (DATE '2025-01-06', 999999, 'demo-acme-corp', 9990001, 'demo-alice', 'demo-alice', 'vscode', 12, 90, 200, 18, 40, 90, 9, 200, 20, NAMED_STRUCT('plugin', 'copilot-chat', 'plugin_version', '0.28.5', 'sampled_at', '2025-01-06T00:00:00Z')),
+  (DATE '2025-01-06', 999999, 'demo-acme-corp', 9990002, 'demo-bob', 'demo-bob', 'intellij', 12, 90, 200, 18, 40, 90, 9, 200, 20, NAMED_STRUCT('plugin', 'copilot', 'plugin_version', '1.5.10.6', 'sampled_at', '2025-01-06T00:00:00Z')),
+  (DATE '2025-01-06', 999999, 'demo-acme-corp', 9990003, 'demo-carol', 'demo-carol', 'vscode', 12, 90, 200, 18, 40, 90, 9, 200, 20, NAMED_STRUCT('plugin', 'copilot-chat', 'plugin_version', '0.28.5', 'sampled_at', '2025-01-06T00:00:00Z')),
+  (DATE '2025-01-07', 999999, 'demo-acme-corp', 9990001, 'demo-alice', 'demo-alice', 'vscode', 12, 90, 200, 18, 40, 90, 9, 200, 20, NAMED_STRUCT('plugin', 'copilot-chat', 'plugin_version', '0.28.5', 'sampled_at', '2025-01-07T00:00:00Z')),
+  (DATE '2025-01-07', 999999, 'demo-acme-corp', 9990002, 'demo-bob', 'demo-bob', 'intellij', 12, 90, 200, 18, 40, 90, 9, 200, 20, NAMED_STRUCT('plugin', 'copilot', 'plugin_version', '1.5.10.6', 'sampled_at', '2025-01-07T00:00:00Z')),
+  (DATE '2025-01-07', 999999, 'demo-acme-corp', 9990003, 'demo-carol', 'demo-carol', 'vscode', 12, 90, 200, 18, 40, 90, 9, 200, 20, NAMED_STRUCT('plugin', 'copilot-chat', 'plugin_version', '0.28.5', 'sampled_at', '2025-01-07T00:00:00Z'));
