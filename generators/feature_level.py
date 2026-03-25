@@ -71,12 +71,12 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
 
     value_lines = []
     for d in date_range(story["start_date"], story["end_date"]):
-        scale = day_scale(d, story)
-        if scale == 0.0:
+        n = active_user_count(d, story, len(all_users))
+        if n == 0:
             continue
+        scale = day_scale(d, story)
         base = trend_base(story, d)
         scaled = {k: max(0, round(v * scale)) for k, v in base.items()}
-        n = active_user_count(d, story, len(all_users))
         for user in all_users[:n]:
             for i, feature in enumerate(active_features):
                 seed = hash((str(d), user["id"], feature)) % 100000

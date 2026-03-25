@@ -21,6 +21,7 @@ noise_pct: 15
 user_count_start: 5
 user_count_end: 100
 user_count_noise_pct: 25
+user_count_daily_noise_pct: 20
 
 # Day scaling
 weekend_multiplier: 0.0

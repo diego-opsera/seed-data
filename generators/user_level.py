@@ -120,7 +120,7 @@ def _build_arrays(
 def _compute_values(d: date, user: dict, i: int, entities: dict, story: dict) -> dict | None:
     """
     Compute scalar values for one user-day.
-    Returns None if the day should be skipped (scale == 0).
+    Returns None only for vacation periods (scale == 0.0).
     """
     scale = day_scale(d, story)
     if scale == 0.0:
@@ -184,6 +184,8 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
     value_lines = []
     for d in date_range(story["start_date"], story["end_date"]):
         n = active_user_count(d, story, len(all_users))
+        if n == 0:
+            continue
         sampled_at = f"{d}T00:00:00.000Z"
         for i, user in enumerate(all_users[:n]):
             vals = _compute_values(d, user, i, entities, story)

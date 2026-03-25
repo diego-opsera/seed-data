@@ -59,19 +59,23 @@ def day_scale(d: date, story: dict) -> float:
     """
     Return a 0.0–1.0 activity multiplier for a given date.
     Returns 1.0 for all days if the story has no day-scaling config.
+    Vacation periods return 0.0. Weekends/holidays return a small random scale.
     """
     if "weekend_multiplier" not in story:
         return 1.0
 
-    # Vacation periods: full shutdown (checked before holiday/weekend logic)
+    # Vacation periods: full shutdown
     for period in story.get("vacation_periods", []):
         vstart = date.fromisoformat(period["start"])
         vend = date.fromisoformat(period["end"])
         if vstart <= d <= vend:
             return 0.0
 
+    day_seed = d.year * 10000 + d.month * 100 + d.day
+
     if d in US_HOLIDAYS:
-        return story.get("holiday_multiplier", 0.05)
+        rng = random.Random(day_seed + 11)
+        return rng.uniform(0.03, 0.08)
 
     if d.weekday() >= 5:  # Saturday=5, Sunday=6
         emergency_str = story.get("emergency_weekend_start")
@@ -79,7 +83,8 @@ def day_scale(d: date, story: dict) -> float:
             ew = date.fromisoformat(emergency_str)
             if d == ew or d == ew + timedelta(days=1):
                 return story.get("emergency_weekend_multiplier", 0.25)
-        return story.get("weekend_multiplier", 0.0)
+        rng = random.Random(day_seed + 33)
+        return rng.uniform(0.05, 0.15)
 
     return 1.0
 
@@ -120,21 +125,47 @@ def expand_users(entities: dict, story: dict) -> list[dict]:
 
 def active_user_count(d: date, story: dict, total_users: int) -> int:
     """
-    Return how many users are active in the month containing d.
-    Uses monthly granularity with noise so counts are stable within a month.
-    Returns total_users if no user_count config is present.
+    Return how many users are active on date d.
+    - Vacation periods: 0
+    - Weekends/holidays: random 0–10% of the day's normal weekday count
+    - Weekdays: monthly trend base + monthly noise + daily jitter
     """
+    # Vacation: no one
+    for period in story.get("vacation_periods", []):
+        if date.fromisoformat(period["start"]) <= d <= date.fromisoformat(period["end"]):
+            return 0
+
+    # Compute the weekday baseline for this date
     if "user_count_start" not in story:
-        return total_users
-    start = date.fromisoformat(story["start_date"])
-    end = date.fromisoformat(story["end_date"])
-    total_days = max((end - start).days, 1)
-    month_anchor = date(d.year, d.month, 1)
-    t = max(0.0, min(1.0, (month_anchor - start).days / total_days))
-    base_count = lerp(story["user_count_start"], story["user_count_end"], t)
-    noise_pct = story.get("user_count_noise_pct", 0)
-    seed = d.year * 100 + d.month
-    count = jitter(round(base_count), noise_pct, seed)
+        weekday_base = total_users
+    else:
+        start = date.fromisoformat(story["start_date"])
+        end = date.fromisoformat(story["end_date"])
+        total_days = max((end - start).days, 1)
+        month_anchor = date(d.year, d.month, 1)
+        t = max(0.0, min(1.0, (month_anchor - start).days / total_days))
+        base_count = lerp(story["user_count_start"], story["user_count_end"], t)
+        monthly_noise = story.get("user_count_noise_pct", 0)
+        monthly_seed = d.year * 100 + d.month
+        weekday_base = max(1, min(jitter(round(base_count), monthly_noise, monthly_seed), total_users))
+
+    day_seed = d.year * 10000 + d.month * 100 + d.day
+
+    # Weekends/holidays: 0–10% of weekday base, random per day
+    if d.weekday() >= 5 or d in US_HOLIDAYS:
+        emergency_str = story.get("emergency_weekend_start")
+        if emergency_str:
+            ew = date.fromisoformat(emergency_str)
+            if d == ew or d == ew + timedelta(days=1):
+                frac = story.get("emergency_weekend_multiplier", 0.25)
+                return max(1, round(weekday_base * frac))
+        rng = random.Random(day_seed + 77)
+        frac = rng.uniform(0.0, 0.10)
+        return max(0, round(weekday_base * frac))
+
+    # Regular weekday: apply daily jitter on top of monthly base
+    daily_noise = story.get("user_count_daily_noise_pct", 15)
+    count = jitter(weekday_base, daily_noise, day_seed)
     return max(1, min(count, total_users))
 
 

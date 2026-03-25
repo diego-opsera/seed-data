@@ -36,12 +36,12 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
 
     value_lines = []
     for d in date_range(story["start_date"], story["end_date"]):
-        scale = day_scale(d, story)
-        if scale == 0.0:
+        n = active_user_count(d, story, len(all_users))
+        if n == 0:
             continue
+        scale = day_scale(d, story)
         base = trend_base(story, d)
         scaled = {k: max(0, round(v * scale)) for k, v in base.items()}
-        n = active_user_count(d, story, len(all_users))
         sampled_at = f"{d}T00:00:00Z"
         for i, user in enumerate(all_users[:n]):
             ide = user_ide_map.get(user["login"]) or default_ide(i)
