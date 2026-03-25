@@ -1,0 +1,6 @@
+payloads/
+notebook_insert_all.py
+*.zip
+__pycache__/
+*.pyc
+.env
