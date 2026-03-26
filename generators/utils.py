@@ -163,10 +163,11 @@ def active_user_count(d: date, story: dict, total_users: int) -> int:
         frac = rng.uniform(0.0, 0.10)
         return max(0, round(weekday_base * frac))
 
-    # Regular weekday: apply daily jitter on top of monthly base
-    daily_noise = story.get("user_count_daily_noise_pct", 15)
-    count = jitter(weekday_base, daily_noise, day_seed)
-    return max(1, min(count, total_users))
+    # Regular weekday: absolute Gaussian noise so every bar looks different
+    daily_abs_noise = story.get("user_count_daily_abs_noise", 8)
+    rng = random.Random(day_seed)
+    offset = round(rng.gauss(0, daily_abs_noise / 2))
+    return max(1, min(weekday_base + offset, total_users))
 
 
 # ---------------------------------------------------------------------------
