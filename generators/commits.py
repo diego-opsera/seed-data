@@ -1,0 +1,84 @@
+"""
+Generator for commits_rest_api.
+One row per commit. Active users make 2–4 commits per business day.
+copilot_commit_flag ramps from ~20% → ~65% over the year, showing growing adoption.
+before_sha is a single parent SHA so queries filtering merge commits (size = 1) include all rows.
+Drives: Commit Trend, Commit Overview.
+"""
+import random
+from datetime import date
+from .utils import date_range, expand_users, active_user_count, lerp, _sql_val
+
+
+TABLE = "commits_rest_api"
+
+INSERT_SQL = """\
+INSERT INTO {catalog}.base_datasets.{table}
+  (commit_id, commit_date, commit_timestamp, org_name, project_name, project_url,
+   cleansed_user_name, cleansed_commit_author, user_id, copilot_commit_flag,
+   lines_added, lines_removed, before_sha, enterprise_id)
+VALUES
+{values};"""
+
+# Projects mapped to user teams
+_TEAM_PROJECT = {
+    "demo-frontend": ("demo-acme-corp/frontend",    "https://github.com/demo-acme-corp/frontend"),
+    "demo-backend":  ("demo-acme-corp/backend",     "https://github.com/demo-acme-corp/backend"),
+}
+_DEFAULT_PROJECT = ("demo-acme-corp/api-gateway", "https://github.com/demo-acme-corp/api-gateway")
+
+# Copilot attribution grows from 20% → 65% over the year
+_COPILOT_FLAG_RATE = (0.20, 0.65)
+
+
+def _fake_sha(seed: int) -> str:
+    """Deterministic 40-char hex string that looks like a git SHA."""
+    rng = random.Random(seed)
+    return "".join(rng.choices("0123456789abcdef", k=40))
+
+
+def generate(catalog: str, entities: dict, story: dict) -> list[str]:
+    ent = entities["enterprise"]
+    org_name = entities["orgs"][0]["name"]
+    all_users = expand_users(entities, story)
+    start = date.fromisoformat(story["start_date"])
+    end   = date.fromisoformat(story["end_date"])
+    total_days = max((end - start).days, 1)
+
+    value_lines = []
+    for d in date_range(story["start_date"], story["end_date"]):
+        if d.weekday() >= 5:  # commits happen on weekdays; weekend spikes handled by active_user_count
+            continue
+        active_n = active_user_count(d, story, len(all_users))
+        if active_n == 0:
+            continue
+        t = max(0.0, min(1.0, (d - start).days / total_days))
+        copilot_rate = lerp(_COPILOT_FLAG_RATE[0], _COPILOT_FLAG_RATE[1], t)
+
+        for user in all_users[:active_n]:
+            project_name, project_url = _TEAM_PROJECT.get(user["team"], _DEFAULT_PROJECT)
+            day_rng = random.Random(hash((str(d), user["id"], "commits")) % (2 ** 31))
+            n_commits = day_rng.randint(2, 4)
+
+            for seq in range(n_commits):
+                c_seed = hash((str(d), user["id"], seq)) % (2 ** 31)
+                c_rng  = random.Random(c_seed)
+                commit_id  = _fake_sha(c_seed)
+                before_sha = _fake_sha(c_seed + 1)  # one parent = non-merge commit
+                copilot_flag = "Y" if c_rng.random() < copilot_rate else "N"
+                lines_added   = c_rng.randint(5, 80)
+                lines_removed = c_rng.randint(0, 30)
+                commit_hour   = c_rng.randint(9, 17)
+                commit_ts     = f"{d.isoformat()} {commit_hour:02d}:00:00"
+
+                value_lines.append(
+                    f"  ({_sql_val(commit_id)}, {_sql_val(d)}, "
+                    f"TIMESTAMP '{commit_ts}', "
+                    f"{_sql_val(org_name)}, {_sql_val(project_name)}, {_sql_val(project_url)}, "
+                    f"{_sql_val(user['login'])}, {_sql_val(user['login'])}, "
+                    f"{user['id']}, {_sql_val(copilot_flag)}, "
+                    f"{lines_added}, {lines_removed}, "
+                    f"{_sql_val(before_sha)}, {ent['id']})"
+                )
+
+    return [INSERT_SQL.format(catalog=catalog, table=TABLE, values=",\n".join(value_lines))]
