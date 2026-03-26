@@ -1,4 +1,10 @@
 import sys, os
+
+# Flush any cached generator modules so re-runs always use the latest cloned code
+for _key in list(sys.modules.keys()):
+    if _key.startswith("generators") or _key in ("loader",):
+        del sys.modules[_key]
+
 sys.path.insert(0, "/tmp/seed-data")
 os.chdir("/tmp/seed-data")
 
