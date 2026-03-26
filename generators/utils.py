@@ -93,6 +93,15 @@ def day_scale(d: date, story: dict) -> float:
 # User expansion and active user count
 # ---------------------------------------------------------------------------
 
+# TODO(known-bug): The "Developer Language And Editor Usage" dashboard table still shows
+# near-uniform user counts and ~45% acceptance rate across all languages/features/models.
+# Root cause suspected: Databricks cluster caches sys.modules across runs, so even with the
+# module-flush in notebook_insert.py, the weighted language assignment in expand_users()
+# and per-language LANG_ACCEPTANCE_RATES may not be taking effect.
+# The dashboard "Percentage" column appears to show acceptance rate (accepted/generated),
+# not language share, and it averages to ~45% regardless of per-language rates set below.
+# Not blocking for demo but worth a proper investigation (cluster restart + debug logging).
+
 # Language weights based on opentelemetry-demo repo distribution (normalized, no Dockerfile/Other)
 _LANG_WEIGHTS = {
     "typescript": 401,
