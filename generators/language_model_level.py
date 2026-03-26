@@ -3,7 +3,7 @@ Generator for enterprise_user_language_model_level_copilot_metrics.
 One row per (usage_date, user, language, model). No nested arrays.
 """
 from datetime import date
-from .utils import date_range, jitter, acceptance_subset, validate_row, _sql_val, trend_base, day_scale, expand_users, active_user_count
+from .utils import date_range, jitter, acceptance_subset, validate_row, _sql_val, trend_base, day_scale, expand_users, active_user_count, LANG_ACCEPTANCE_RATES
 
 
 TABLE = "enterprise_user_language_model_level_copilot_metrics"
@@ -35,16 +35,17 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
         base = trend_base(story, d)
         scaled = {k: max(0, round(v * scale)) for k, v in base.items()}
         for i, user in enumerate(all_users[:n]):
-            language = languages[i % len(languages)]
+            language = user["language"]
             model = models[i % len(models)]
+            acc_rate = LANG_ACCEPTANCE_RATES.get(language, 0.45)
             seed = hash((str(d), user["id"], language, model)) % 100000
 
             code_gen = jitter(scaled["code_generation_activity_count"], noise, seed)
-            code_acc = acceptance_subset(code_gen, 0.45)
+            code_acc = acceptance_subset(code_gen, acc_rate)
             loc_sugg_add = jitter(scaled["loc_suggested_to_add"], noise, seed + 1)
             loc_sugg_del = jitter(scaled["loc_suggested_to_delete"], noise, seed + 2)
-            loc_add = acceptance_subset(loc_sugg_add, 0.45)
-            loc_del = acceptance_subset(loc_sugg_del, 0.45)
+            loc_add = acceptance_subset(loc_sugg_add, acc_rate)
+            loc_del = acceptance_subset(loc_sugg_del, acc_rate)
 
             row = {
                 "code_generation_activity_count": code_gen,

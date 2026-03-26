@@ -4,7 +4,7 @@ One row per (usage_date, user, ide).
 Has one STRUCT column (last_known_plugin_version) but no ARRAY columns.
 """
 from datetime import date
-from .utils import date_range, jitter, acceptance_subset, validate_row, _sql_val, named_struct, PLUGIN_NAMES, PLUGIN_VERSIONS, trend_base, day_scale, expand_users, active_user_count, default_ide
+from .utils import date_range, jitter, acceptance_subset, validate_row, _sql_val, named_struct, PLUGIN_NAMES, PLUGIN_VERSIONS, trend_base, day_scale, expand_users, active_user_count
 
 
 TABLE = "enterprise_user_ide_level_copilot_metrics"
@@ -31,7 +31,6 @@ def _plugin_struct(ide: str, sampled_at: str) -> str:
 def generate(catalog: str, entities: dict, story: dict) -> list[str]:
     ent = entities["enterprise"]
     noise = story.get("noise_pct", 0)
-    user_ide_map = story.get("user_ide_map", {})
     all_users = expand_users(entities, story)
 
     value_lines = []
@@ -44,7 +43,7 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
         scaled = {k: max(0, round(v * scale)) for k, v in base.items()}
         sampled_at = f"{d}T00:00:00Z"
         for i, user in enumerate(all_users[:n]):
-            ide = user_ide_map.get(user["login"]) or default_ide(i)
+            ide = user["ide"]
             seed = hash((str(d), user["id"], ide)) % 100000
 
             code_gen = jitter(scaled["code_generation_activity_count"], noise, seed)

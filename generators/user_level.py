@@ -5,7 +5,8 @@ One row per (usage_date, user) with five nested ARRAY<STRUCT> columns.
 from datetime import date
 from .utils import (
     date_range, jitter, acceptance_subset, split_across, validate_row, _sql_val,
-    sql_array, trend_base, day_scale, expand_users, active_user_count, default_ide,
+    sql_array, trend_base, day_scale, expand_users, active_user_count,
+    LANG_ACCEPTANCE_RATES,
     totals_by_feature_entry,
     totals_by_ide_entry,
     totals_by_language_feature_entry,
@@ -131,23 +132,22 @@ def _compute_values(d: date, user: dict, i: int, entities: dict, story: dict) ->
     noise = story.get("noise_pct", 0)
     seed = hash((str(d), user["id"])) % 100000
 
-    languages = entities["languages"]
     models = entities["models"]
-    user_ide_map = story.get("user_ide_map", {})
+    acc_rate = LANG_ACCEPTANCE_RATES.get(user["language"], 0.45)
 
     code_gen = jitter(scaled["code_generation_activity_count"], noise, seed)
-    code_acc = acceptance_subset(code_gen, 0.45)
+    code_acc = acceptance_subset(code_gen, acc_rate)
     loc_sugg_add = jitter(scaled["loc_suggested_to_add"], noise, seed + 1)
     loc_sugg_del = jitter(scaled["loc_suggested_to_delete"], noise, seed + 2)
-    loc_add = acceptance_subset(loc_sugg_add, 0.45)
-    loc_del = acceptance_subset(loc_sugg_del, 0.45)
+    loc_add = acceptance_subset(loc_sugg_add, acc_rate)
+    loc_del = acceptance_subset(loc_sugg_del, acc_rate)
     interactions = jitter(scaled["user_initiated_interaction_count"], noise, seed + 3)
 
     return {
         "usage_date": str(d),
         "user_id": user["id"],
-        "ide": user_ide_map.get(user["login"]) or default_ide(i),
-        "language": languages[i % len(languages)],
+        "ide": user["ide"],
+        "language": user["language"],
         "model": models[i % len(models)],
         "code_generation_activity_count": code_gen,
         "code_acceptance_activity_count": code_acc,

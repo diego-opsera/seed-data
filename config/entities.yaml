@@ -48,11 +48,11 @@ features:
   - chat_panel_unknown_mode
 
 languages:
-  - python
-  - javascript
   - typescript
-  - java
+  - python
+  - elixir
   - go
+  - csharp
 
 models:
   - gpt-4o

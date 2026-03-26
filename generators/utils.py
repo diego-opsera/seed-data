@@ -93,33 +93,75 @@ def day_scale(d: date, story: dict) -> float:
 # User expansion and active user count
 # ---------------------------------------------------------------------------
 
-# IDE distribution for auto-generated users: 60% vscode, 30% intellij, 10% visualstudio
-_IDE_POOL = ["vscode"] * 6 + ["intellij"] * 3 + ["visualstudio"] * 1
+# Language weights based on opentelemetry-demo repo distribution (normalized, no Dockerfile/Other)
+_LANG_WEIGHTS = {
+    "typescript": 401,
+    "python": 195,
+    "elixir": 108,
+    "go":  64,
+    "csharp": 43,
+}
+
+# Per-language Copilot acceptance rates (TypeScript/Python higher, Elixir lower due to less training data)
+LANG_ACCEPTANCE_RATES = {
+    "typescript": 0.52,
+    "python": 0.55,
+    "elixir": 0.38,
+    "go": 0.45,
+    "csharp": 0.48,
+}
+
+# IDE weights: VSCode dominates TypeScript/Python/Go; Visual Studio for C#; IntelliJ general
+_IDE_WEIGHTS = {
+    "vscode": 70,
+    "intellij": 15,
+    "visualstudio": 10,
+    "eclipse": 3,
+    "xcode": 2,
+}
 
 
 def default_ide(user_index: int) -> str:
-    return _IDE_POOL[user_index % len(_IDE_POOL)]
+    # Kept for backward compatibility; expand_users now assigns ide directly
+    pool = ["vscode"] * 7 + ["intellij"] * 2 + ["visualstudio"] * 1
+    return pool[user_index % len(pool)]
 
 
 def expand_users(entities: dict, story: dict) -> list[dict]:
     """
     Return the full user list for this story.
     Auto-generates users beyond the base entities list up to user_count_end.
+    Each user gets a stable language and ide assigned once (seeded by user id).
+    Named users in user_ide_map get their ide overridden.
     """
     base = entities["users"]
     target = story.get("user_count_end", len(base))
+    user_ide_map = story.get("user_ide_map", {})
+
+    languages = entities["languages"]
+    ides = entities["ides"]
+    lang_weights = [_LANG_WEIGHTS.get(l, 10) for l in languages]
+    ide_weights = [_IDE_WEIGHTS.get(ide, 5) for ide in ides]
+
     if target <= len(base):
-        return list(base)
-    users = list(base)
-    for i in range(len(base), target):
-        n = i + 1
-        num = str(n).zfill(3)
-        users.append({
-            "id": 9990000 + n,
-            "login": f"demo-user-{num}",
-            "assignee_login": f"demo-user-{num}",
-            "team": "demo-backend" if n % 3 != 0 else "demo-frontend",
-        })
+        users = list(base)
+    else:
+        users = list(base)
+        for i in range(len(base), target):
+            n = i + 1
+            num = str(n).zfill(3)
+            users.append({
+                "id": 9990000 + n,
+                "login": f"demo-user-{num}",
+                "assignee_login": f"demo-user-{num}",
+                "team": "demo-backend" if n % 3 != 0 else "demo-frontend",
+            })
+
+    for user in users:
+        rng = random.Random(user["id"])
+        user["language"] = rng.choices(languages, weights=lang_weights)[0]
+        user["ide"] = user_ide_map.get(user["login"]) or rng.choices(ides, weights=ide_weights)[0]
+
     return users
 
 
