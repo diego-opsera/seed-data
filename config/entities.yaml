@@ -5,7 +5,9 @@ enterprise:
 
 orgs:
   - id: 9990001
-    name: "demo-acme-engineering"
+    name: "demo-acme-engineering"     # core batch (stable)
+  - id: 9990002
+    name: "demo-acme-direct"          # direct batch (safe to wipe during testing)
 
 teams:
   - name: "demo-backend"

@@ -20,11 +20,16 @@ def load_yaml(path):
 entities = load_yaml("config/entities.yaml")
 story    = load_yaml("config/stories/narrative.yaml")
 
+# Scope all direct-batch data to the test org so it can be wiped independently
+# of the core batch (demo-acme-engineering). Switch orgs[0] to the direct org
+# before passing entities to any generator.
+entities_direct = {**entities, "orgs": [entities["orgs"][1]]}
+
 statements = []
-statements += [(direct_data.TABLE,   s) for s in direct_data.generate(CATALOG, entities, story)]
-statements += [(seats_usage.TABLE,   s) for s in seats_usage.generate(CATALOG, entities, story)]
-statements += [(ide_org_level.TABLE, s) for s in ide_org_level.generate(CATALOG, entities, story)]
-statements += [(commits.TABLE,       s) for s in commits.generate(CATALOG, entities, story)]
+statements += [(direct_data.TABLE,   s) for s in direct_data.generate(CATALOG, entities_direct, story)]
+statements += [(seats_usage.TABLE,   s) for s in seats_usage.generate(CATALOG, entities_direct, story)]
+statements += [(ide_org_level.TABLE, s) for s in ide_org_level.generate(CATALOG, entities_direct, story)]
+statements += [(commits.TABLE,       s) for s in commits.generate(CATALOG, entities_direct, story)]
 
 for i, (table, sql) in enumerate(statements, 1):
     print(f"[{i}/{len(statements)}] {table}...", end=" ")
