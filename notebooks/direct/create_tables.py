@@ -1,4 +1,4 @@
-TARGET_CATALOG = "opsera_test"  # change to your playground catalog
+TARGET_CATALOG = "playground_prod"
 TARGET_SCHEMA  = "base_datasets"
 
 ddls = {
