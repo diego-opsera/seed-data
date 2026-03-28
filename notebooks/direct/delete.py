@@ -4,8 +4,6 @@ TEST_ORG = "demo-acme-direct"   # only ever touches this org — core data is sa
 
 tables = [
     "trf_github_copilot_direct_data",
-    "v_github_copilot_seats_usage_user_level",
-    "v_github_copilot_metrics_ide_org_level",
     "commits_rest_api",
 ]
 

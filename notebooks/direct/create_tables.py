@@ -21,61 +21,6 @@ TBLPROPERTIES (
   'delta.minWriterVersion' = '7')
 """,
 
-"v_github_copilot_seats_usage_user_level": f"""
-CREATE TABLE IF NOT EXISTS {TARGET_CATALOG}.{TARGET_SCHEMA}.v_github_copilot_seats_usage_user_level (
-  record_insert_datetime TIMESTAMP,
-  cleansed_assignee_login STRING,
-  copilot_usage_date DATE,
-  copilot_usage_datetime TIMESTAMP,
-  org_name STRING,
-  org_assignee_login STRING,
-  enterprise_id INT)
-USING delta
-TBLPROPERTIES (
-  'delta.enableDeletionVectors' = 'true',
-  'delta.feature.appendOnly' = 'supported',
-  'delta.feature.deletionVectors' = 'supported',
-  'delta.feature.invariants' = 'supported',
-  'delta.minReaderVersion' = '3',
-  'delta.minWriterVersion' = '7')
-""",
-
-"v_github_copilot_metrics_ide_org_level": f"""
-CREATE TABLE IF NOT EXISTS {TARGET_CATALOG}.{TARGET_SCHEMA}.v_github_copilot_metrics_ide_org_level (
-  copilot_usage_date DATE,
-  org_name STRING,
-  enterprise_id INT,
-  ide_code_completion_editor_language STRING,
-  ide_code_completion_editor_name STRING,
-  ide_code_completion_code_suggestions BIGINT,
-  ide_code_completion_code_acceptances BIGINT,
-  ide_code_completion_code_lines_suggested BIGINT,
-  ide_code_completion_code_lines_accepted BIGINT,
-  ide_code_completion_code_lines_suggested_to_add BIGINT,
-  ide_code_completion_code_lines_suggested_to_delete BIGINT,
-  ide_code_completion_code_lines_accepted_to_add BIGINT,
-  ide_code_completion_code_lines_accepted_to_delete BIGINT,
-  ide_code_completion_engaged_users BIGINT,
-  ide_chat_engaged_users BIGINT,
-  agent_engaged_users BIGINT,
-  total_active_users BIGINT,
-  total_engaged_users BIGINT,
-  ide_chat_model_name STRING,
-  ide_chat_editor_name STRING,
-  ide_chat_editor_chats BIGINT,
-  total_interactions_count BIGINT,
-  agent_lines_accepted_to_add BIGINT,
-  agent_lines_accepted_to_delete BIGINT)
-USING delta
-TBLPROPERTIES (
-  'delta.enableDeletionVectors' = 'true',
-  'delta.feature.appendOnly' = 'supported',
-  'delta.feature.deletionVectors' = 'supported',
-  'delta.feature.invariants' = 'supported',
-  'delta.minReaderVersion' = '3',
-  'delta.minWriterVersion' = '7')
-""",
-
 "commits_rest_api": f"""
 CREATE TABLE IF NOT EXISTS {TARGET_CATALOG}.{TARGET_SCHEMA}.commits_rest_api (
   commit_id STRING,

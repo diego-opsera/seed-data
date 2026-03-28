@@ -9,7 +9,7 @@ sys.path.insert(0, "/tmp/seed-data")
 os.chdir("/tmp/seed-data")
 
 import yaml
-from generators import direct_data, seats_usage, ide_org_level, commits
+from generators import direct_data, commits
 
 CATALOG = "playground_prod"
 
@@ -26,10 +26,8 @@ story    = load_yaml("config/stories/narrative.yaml")
 entities_direct = {**entities, "orgs": [entities["orgs"][1]]}
 
 statements = []
-statements += [(direct_data.TABLE,   s) for s in direct_data.generate(CATALOG, entities_direct, story)]
-statements += [(seats_usage.TABLE,   s) for s in seats_usage.generate(CATALOG, entities_direct, story)]
-statements += [(ide_org_level.TABLE, s) for s in ide_org_level.generate(CATALOG, entities_direct, story)]
-statements += [(commits.TABLE,       s) for s in commits.generate(CATALOG, entities_direct, story)]
+statements += [(direct_data.TABLE, s) for s in direct_data.generate(CATALOG, entities_direct, story)]
+statements += [(commits.TABLE,     s) for s in commits.generate(CATALOG, entities_direct, story)]
 
 for i, (table, sql) in enumerate(statements, 1):
     print(f"[{i}/{len(statements)}] {table}...", end=" ")
