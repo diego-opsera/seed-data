@@ -92,7 +92,9 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                 file_dels = split_across(lines_removed, n_files)
                 file_structs = [
                     f"NAMED_STRUCT('file_extension', '{ext}', "
-                    f"'lines', NAMED_STRUCT('additions', {file_adds[i]}, 'deletions', {file_dels[i]}))"
+                    f"'lines', NAMED_STRUCT('additions', {file_adds[i]}, "
+                    f"'changes', {file_adds[i] + file_dels[i]}, "
+                    f"'deletions', {file_dels[i]}))"
                     for i in range(n_files)
                 ]
                 file_ext_sql = f"ARRAY({', '.join(file_structs)})"

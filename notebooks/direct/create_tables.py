@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS {TARGET_CATALOG}.{TARGET_SCHEMA}.commits_rest_api (
   lines_removed INT,
   before_sha STRING,
   enterprise_id INT,
-  file_extension ARRAY<STRUCT<file_extension: STRING, lines: STRUCT<additions: INT, deletions: INT>>>)
+  file_extension ARRAY<STRUCT<file_extension: STRING, lines: STRUCT<additions: INT, changes: INT, deletions: INT>>>)
 USING delta
 TBLPROPERTIES (
   'delta.enableDeletionVectors' = 'true',
