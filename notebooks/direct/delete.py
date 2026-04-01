@@ -25,6 +25,15 @@ organization_tables = [
     ("base_datasets",   "secret_scan_alert"),
 ]
 
+# consumption_layer tables
+consumption_org_name_tables = [
+    ("consumption_layer", "ai_code_assistant_usage_user_level"),
+]
+
+consumption_level_name_tables = [
+    ("consumption_layer", "ai_assistant_acceptance_info"),
+]
+
 for schema, table in org_name_tables:
     n = spark.sql(
         f"DELETE FROM {CATALOG}.{schema}.{table} WHERE org_name = '{TEST_ORG}'"
@@ -34,6 +43,18 @@ for schema, table in org_name_tables:
 for schema, table in organization_tables:
     n = spark.sql(
         f"DELETE FROM {CATALOG}.{schema}.{table} WHERE organization = '{TEST_ORG}'"
+    ).collect()[0][0]
+    print(f"Deleted {n} rows from {schema}.{table}")
+
+for schema, table in consumption_org_name_tables:
+    n = spark.sql(
+        f"DELETE FROM {CATALOG}.{schema}.{table} WHERE org_name = '{TEST_ORG}'"
+    ).collect()[0][0]
+    print(f"Deleted {n} rows from {schema}.{table}")
+
+for schema, table in consumption_level_name_tables:
+    n = spark.sql(
+        f"DELETE FROM {CATALOG}.{schema}.{table} WHERE level_name = '{TEST_ORG}'"
     ).collect()[0][0]
     print(f"Deleted {n} rows from {schema}.{table}")
 
@@ -64,4 +85,14 @@ n = spark.sql(
     f"WHERE merge_request_id LIKE 'demo-seed-pr-%'"
 ).collect()[0][0]
 print(f"  base_datasets.pull_requests (demo-seed-pr-* only): {n}")
+for schema, table in consumption_org_name_tables:
+    n = spark.sql(
+        f"SELECT COUNT(*) FROM {CATALOG}.{schema}.{table} WHERE org_name = '{TEST_ORG}'"
+    ).collect()[0][0]
+    print(f"  {schema}.{table}: {n}")
+for schema, table in consumption_level_name_tables:
+    n = spark.sql(
+        f"SELECT COUNT(*) FROM {CATALOG}.{schema}.{table} WHERE level_name = '{TEST_ORG}'"
+    ).collect()[0][0]
+    print(f"  {schema}.{table}: {n}")
 print(f"  master_data.file_extensions: (not cleaned — shared reference table)")
