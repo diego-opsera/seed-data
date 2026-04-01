@@ -2,7 +2,7 @@ CATALOG = "playground_prod"
 
 print("=== v_github_copilot_seats_billing schema + row count for demo-acme-direct ===")
 spark.sql("DESCRIBE EXTENDED playground_prod.base_datasets.v_github_copilot_seats_billing").show(40, False)
-spark.sql("SELECT COUNT(*) as cnt FROM playground_prod.base_datasets.v_github_copilot_seats_billing WHERE org_name = 'demo-acme-direct'").show()
+spark.sql("SELECT COUNT(*) as cnt FROM playground_prod.base_datasets.v_github_copilot_seats_billing WHERE organization = 'demo-acme-direct'").show()
 
 print("=== v_itsm_issues_current schema + row count for demo-acme-direct ===")
 spark.sql("DESCRIBE EXTENDED playground_prod.base_datasets.v_itsm_issues_current").show(40, False)
