@@ -1,63 +1,63 @@
 """
-Generator for v_github_copilot_seats_usage_user_level.
-One row per (business day, user) for all allocated seat holders.
-Active users receive copilot_usage_date = that day; over-allocated seats get NULL.
-Drives: License Trend, License Table (allocated vs active licenses).
+Generator for source_to_stage.raw_github_copilot_seats.
+
+One row per (user, week) for active weeks — feeds
+v_github_copilot_seats_usage_user_level via a JOIN with
+master_data.github_copilot_orgs_mapping.
+
+Scoped to org_name = demo-acme-direct for safe delete.
 """
-from datetime import date
+from datetime import date, datetime, timedelta
 from .utils import date_range, expand_users, active_user_count, lerp, _sql_val
 
-
-TABLE = "v_github_copilot_seats_usage_user_level"
+TABLE  = "raw_github_copilot_seats"
+SCHEMA = "source_to_stage"
 
 INSERT_SQL = """\
-INSERT INTO {catalog}.base_datasets.{table}
-  (record_insert_datetime, cleansed_assignee_login, copilot_usage_date,
-   copilot_usage_datetime, org_name, org_assignee_login, enterprise_id)
+INSERT INTO {catalog}.source_to_stage.raw_github_copilot_seats
+  (org_name, org_assignee_login, assignee_login, assignee_id,
+   assigning_team_id, assigning_team_name, assigning_team_slug,
+   last_activity_at, last_activity_editor,
+   created_at, updated_at, pending_cancellation_date,
+   source_record_insert_datetime, plan_type, message)
 VALUES
 {values};"""
 
-# Seats provisioned slightly ahead of the active user trend (~12% buffer).
-# This produces a realistic "inactive licenses" slice in the dashboard.
-_ALLOC_BUFFER = 1.12
-
 
 def generate(catalog: str, entities: dict, story: dict) -> list[str]:
-    ent = entities["enterprise"]
-    org_name = entities["orgs"][0]["name"]
+    org_name  = entities["orgs"][1]["name"]          # demo-acme-direct
     all_users = expand_users(entities, story)
-    start = date.fromisoformat(story["start_date"])
-    end   = date.fromisoformat(story["end_date"])
-    total_days = max((end - start).days, 1)
+    start     = date.fromisoformat(story["start_date"])
+    end       = date.fromisoformat(story["end_date"])
+
+    # Seat creation date = start of story for all users
+    created_at = f"{start.isoformat()} 00:00:00"
+
+    # Weekly snapshots: iterate Mondays only
+    mondays = [
+        d for d in date_range(story["start_date"], story["end_date"])
+        if d.weekday() == 0
+    ]
 
     value_lines = []
-    for d in date_range(story["start_date"], story["end_date"]):
-        if d.weekday() >= 5:  # license snapshots are taken on business days only
-            continue
+    for d in mondays:
         active_n = active_user_count(d, story, len(all_users))
-        t = max(0.0, min(1.0, (d - start).days / total_days))
-        allocated_n = min(
-            len(all_users),
-            max(active_n, round(lerp(
-                story["user_count_start"] * _ALLOC_BUFFER,
-                story["user_count_end"] * _ALLOC_BUFFER,
-                t,
-            ))),
-        )
+        if active_n == 0:
+            continue
 
         snap_ts = f"{d.isoformat()} 12:00:00"
-        for i, user in enumerate(all_users[:allocated_n]):
-            if i < active_n:
-                usage_date_sql = _sql_val(d)
-                usage_ts_sql   = f"TIMESTAMP '{d.isoformat()} 09:00:00'"
-            else:
-                usage_date_sql = "NULL"
-                usage_ts_sql   = "NULL"
+
+        for user in all_users[:active_n]:
+            team_name = user.get("team", "demo-backend")
+            team_id   = abs(hash(team_name)) % 90000 + 10000
+
             value_lines.append(
-                f"  (TIMESTAMP '{snap_ts}', {_sql_val(user['login'])}, "
-                f"{usage_date_sql}, {usage_ts_sql}, "
-                f"{_sql_val(org_name)}, {_sql_val(user['assignee_login'])}, "
-                f"{ent['id']})"
+                f"  ({_sql_val(org_name)}, {_sql_val(user['login'])}, "
+                f"{_sql_val(user['login'])}, {_sql_val(str(user['id']))}, "
+                f"{team_id}, {_sql_val(team_name)}, {_sql_val(team_name)}, "
+                f"TIMESTAMP '{snap_ts}', {_sql_val(user.get('ide', 'vscode'))}, "
+                f"TIMESTAMP '{created_at}', TIMESTAMP '{snap_ts}', NULL, "
+                f"TIMESTAMP '{snap_ts}', 'enterprise', NULL)"
             )
 
-    return [INSERT_SQL.format(catalog=catalog, table=TABLE, values=",\n".join(value_lines))]
+    return [INSERT_SQL.format(catalog=catalog, values=",\n".join(value_lines))]

@@ -1,17 +1,24 @@
 CATALOG  = "playground_prod"
-SCHEMA   = "base_datasets"
-TEST_ORG = "demo-acme-direct"   # only ever touches this org — core data is safe
+TEST_ORG = "demo-acme-direct"
 
+# Tables scoped by org_name = 'demo-acme-direct'
 tables = [
-    "trf_github_copilot_direct_data",
-    "commits_rest_api",
+    ("base_datasets",  "trf_github_copilot_direct_data"),
+    ("base_datasets",  "commits_rest_api"),
+    ("source_to_stage", "raw_github_copilot_seats"),
+    ("master_data",    "github_copilot_orgs_mapping"),
+    ("base_datasets",  "github_copilot_metrics_ide_org_level"),
 ]
 
-for table in tables:
-    spark.sql(f"DELETE FROM {CATALOG}.{SCHEMA}.{table} WHERE org_name = '{TEST_ORG}'")
-    print(f"Deleted from {table}")
+for schema, table in tables:
+    spark.sql(
+        f"DELETE FROM {CATALOG}.{schema}.{table} WHERE org_name = '{TEST_ORG}'"
+    )
+    print(f"Deleted from {schema}.{table}")
 
 print("\nVerifying (should all be 0):")
-for table in tables:
-    n = spark.sql(f"SELECT COUNT(*) FROM {CATALOG}.{SCHEMA}.{table} WHERE org_name = '{TEST_ORG}'").collect()[0][0]
-    print(f"  {table}: {n}")
+for schema, table in tables:
+    n = spark.sql(
+        f"SELECT COUNT(*) FROM {CATALOG}.{schema}.{table} WHERE org_name = '{TEST_ORG}'"
+    ).collect()[0][0]
+    print(f"  {schema}.{table}: {n}")

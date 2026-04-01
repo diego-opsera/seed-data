@@ -9,7 +9,7 @@ sys.path.insert(0, "/tmp/seed-data")
 os.chdir("/tmp/seed-data")
 
 import yaml
-from generators import direct_data, commits
+from generators import direct_data, commits, seats_usage, org_mapping, ide_org_level
 
 CATALOG = "playground_prod"
 
@@ -28,6 +28,9 @@ entities_direct = {**entities, "orgs": [entities["orgs"][1]]}
 statements = []
 statements += [(direct_data.TABLE, s) for s in direct_data.generate(CATALOG, entities_direct, story)]
 statements += [(commits.TABLE,     s) for s in commits.generate(CATALOG, entities_direct, story)]
+statements += [(seats_usage.TABLE, s) for s in seats_usage.generate(CATALOG, entities, story)]
+statements += [(org_mapping.TABLE, s) for s in org_mapping.generate(CATALOG, entities, story)]
+statements += [(ide_org_level.TABLE, s) for s in ide_org_level.generate(CATALOG, entities_direct, story)]
 
 for i, (table, sql) in enumerate(statements, 1):
     print(f"[{i}/{len(statements)}] {table}...", end=" ")
