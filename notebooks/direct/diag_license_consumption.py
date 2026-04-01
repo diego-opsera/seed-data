@@ -11,3 +11,6 @@ spark.sql("SELECT COUNT(*) as cnt FROM playground_prod.consumption_layer.ai_assi
 
 print("=== consumption_layer.ai_code_assistant_usage_user_level ===")
 spark.sql("SELECT COUNT(*) as cnt FROM playground_prod.consumption_layer.ai_code_assistant_usage_user_level WHERE org_name = 'demo-acme-direct'").show()
+
+print("=== ai_assistant_acceptance_info by tool and org ===")
+spark.sql("SELECT ai_assistant_tool_name, level_name, COUNT(*) as cnt FROM playground_prod.consumption_layer.ai_assistant_acceptance_info GROUP BY ai_assistant_tool_name, level_name ORDER BY cnt DESC LIMIT 10").show(10, False)
