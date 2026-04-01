@@ -100,7 +100,7 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
 
             value_lines.append(
                 f"  ({_sql_val(d)}, {_sql_val(org_name)}, "
-                f"{total_active}, {total_active}, "
+                f"{n_users}, {n_users}, "
                 f"{chat_users}, 'gpt-4o', 0, "
                 f"{_sql_val(ide)}, {chat_chats}, "
                 f"{chat_users}, "
@@ -113,7 +113,7 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                 f"{lines_sugg}, {lines_acc}, "
                 f"{suggestions}, {acceptances}, "
                 f"{lines_sugg}, {lines_acc}, "
-                f"{total_active}, "
+                f"{n_users}, "
                 f"{chat_accepts}, {chat_chats}, {chat_users}, "
                 f"'REST', {now_ts}, 'seed-data')"
             )
