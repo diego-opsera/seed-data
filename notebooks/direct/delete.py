@@ -10,6 +10,11 @@ TEST_ORG = "demo-acme-direct"
 #   - file_extensions       : no-op (MERGE insert, nothing to remove)
 # ─────────────────────────────────────────────────────────────────────────────
 
+# source_to_stage tables with org_name scope
+source_to_stage_tables = [
+    ("source_to_stage", "raw_github_teams_members"),
+]
+
 # Tables whose org column is named org_name
 org_name_tables = [
     ("base_datasets",   "trf_github_copilot_direct_data"),
@@ -34,7 +39,7 @@ consumption_level_name_tables = [
     ("consumption_layer", "ai_assistant_acceptance_info"),
 ]
 
-for schema, table in org_name_tables:
+for schema, table in source_to_stage_tables + org_name_tables:
     n = spark.sql(
         f"DELETE FROM {CATALOG}.{schema}.{table} WHERE org_name = '{TEST_ORG}'"
     ).collect()[0][0]

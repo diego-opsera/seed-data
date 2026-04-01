@@ -54,27 +54,25 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
 
     created_at = f"{start.isoformat()} 00:00:00"
 
-    # TODO: daily inserts would make the daily chart view work correctly, but the
-    # dashboard currently groups both Allocated and Usage by last_activity_at date,
-    # so inactive allocated seats (last_activity_editor=NULL) collapse to the same
-    # date as active ones and get counted as usage. Needs dashboard query investigation
-    # before switching to daily granularity.
+    # Active users: daily weekday rows so COUNT(DISTINCT copilot_usage_date)
+    # reaches the 75% threshold needed for heavy_user_percentage.
+    # Inactive seats stay weekly (Monday snapshots) to limit row count.
 
-    mondays = [
+    weekdays = [
         d for d in date_range(story["start_date"], story["end_date"])
-        if d.weekday() == 0
+        if d.weekday() < 5
     ]
 
+    mondays = [d for d in weekdays if d.weekday() == 0]
+
     value_lines = []
-    for d in mondays:
-        allocated_n = _allocated_count(d)
-        active_n    = min(active_user_count(d, story, len(all_users)), allocated_n)
-        if allocated_n == 0:
+
+    # ── Active seats: one row per user per weekday ────────────────────────────
+    for d in weekdays:
+        active_n = min(active_user_count(d, story, len(all_users)), _allocated_count(d))
+        if active_n == 0:
             continue
-
         snap_ts = f"{d.isoformat()} 12:00:00"
-
-        # Active seats: last_activity_editor set — dashboard counts these as usage
         for user in all_users[:active_n]:
             team_name = user.get("team", "demo-backend")
             team_id   = abs(hash(team_name)) % 90000 + 10000
@@ -87,7 +85,13 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                 f"TIMESTAMP '{snap_ts}', 'enterprise', NULL)"
             )
 
-        # Allocated-but-inactive seats: last_activity_editor = NULL — allocated but not usage
+    # ── Allocated-but-inactive seats: weekly Monday snapshots ─────────────────
+    for d in mondays:
+        allocated_n = _allocated_count(d)
+        active_n    = min(active_user_count(d, story, len(all_users)), allocated_n)
+        if allocated_n == 0:
+            continue
+        snap_ts = f"{d.isoformat()} 12:00:00"
         for i in range(active_n, allocated_n):
             if i < len(all_users):
                 login     = all_users[i]["login"]

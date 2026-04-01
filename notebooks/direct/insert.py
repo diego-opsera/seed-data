@@ -11,7 +11,7 @@ os.chdir("/tmp/seed-data")
 import yaml
 from generators import direct_data, commits, seats_usage, org_mapping, ide_org_level
 from generators import code_scan_alert, secret_scan_alert, file_extensions, pull_requests
-from generators import ai_assistant_acceptance, ai_usage_user_level
+from generators import ai_assistant_acceptance, ai_usage_user_level, github_teams_members
 
 CATALOG = "playground_prod"
 
@@ -38,7 +38,8 @@ statements += [(code_scan_alert.TABLE,  s) for s in code_scan_alert.generate(CAT
 statements += [(secret_scan_alert.TABLE, s) for s in secret_scan_alert.generate(CATALOG, entities_direct, story)]
 statements += [(pull_requests.TABLE,         s) for s in pull_requests.generate(CATALOG, entities_direct, story)]
 statements += [(ai_assistant_acceptance.TABLE, s) for s in ai_assistant_acceptance.generate(CATALOG, entities_direct, story)]
-statements += [(ai_usage_user_level.TABLE,     s) for s in ai_usage_user_level.generate(CATALOG, entities_direct, story)]
+statements += [(ai_usage_user_level.TABLE,       s) for s in ai_usage_user_level.generate(CATALOG, entities_direct, story)]
+statements += [(github_teams_members.TABLE,      s) for s in github_teams_members.generate(CATALOG, entities_direct, story)]
 
 for i, (table, sql) in enumerate(statements, 1):
     print(f"[{i}/{len(statements)}] {table}...", end=" ")
