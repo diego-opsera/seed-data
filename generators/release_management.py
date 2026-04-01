@@ -29,15 +29,16 @@ VALUES
 
 # fix_version prefixed with 'demo-' so delete can safely target LIKE 'demo-%'
 # level_value must match the dashboard's configured project IDs
+# release_dates all within last 270 days from 2026-03-31 (i.e. >= 2025-07-05)
 _RELEASES = [
-    ("demo-v2025.1", "Insights",     date(2025, 1,  6), date(2025, 1, 31), "released"),
-    ("demo-v2025.2", "Insights",     date(2025, 4,  1), date(2025, 4, 30), "released"),
-    ("demo-v2025.3", "Insights",     date(2025, 7,  1), date(2025, 7, 31), "released"),
-    ("demo-v2025.4", "Insights",     date(2025, 10, 1), date(2025, 10, 31), "unreleased"),
-    ("demo-v2025.1", "project_001",  date(2025, 1,  6), date(2025, 1, 31), "released"),
-    ("demo-v2025.2", "project_001",  date(2025, 4,  1), date(2025, 4, 30), "released"),
-    ("demo-v2025.3", "project_001",  date(2025, 7,  1), date(2025, 7, 31), "released"),
-    ("demo-v2025.4", "project_001",  date(2025, 10, 1), date(2025, 10, 31), "unreleased"),
+    ("demo-v2025.3", "Insights",    date(2025, 7,  7), date(2025, 8, 15), "released"),
+    ("demo-v2025.4", "Insights",    date(2025, 9,  1), date(2025, 10, 31), "released"),
+    ("demo-v2026.1", "Insights",    date(2025, 11, 3), date(2026, 1, 30), "released"),
+    ("demo-v2026.2", "Insights",    date(2026, 2,  2), date(2026, 3, 27), "unreleased"),
+    ("demo-v2025.3", "project_001", date(2025, 7,  7), date(2025, 8, 15), "released"),
+    ("demo-v2025.4", "project_001", date(2025, 9,  1), date(2025, 10, 31), "released"),
+    ("demo-v2026.1", "project_001", date(2025, 11, 3), date(2026, 1, 30), "released"),
+    ("demo-v2026.2", "project_001", date(2026, 2,  2), date(2026, 3, 27), "unreleased"),
 ]
 
 _AUTHORS = [
