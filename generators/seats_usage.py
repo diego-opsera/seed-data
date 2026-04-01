@@ -54,13 +54,8 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
 
     created_at = f"{start.isoformat()} 00:00:00"
 
-    mondays = [
-        d for d in date_range(story["start_date"], story["end_date"])
-        if d.weekday() == 0
-    ]
-
     value_lines = []
-    for d in mondays:
+    for d in date_range(story["start_date"], story["end_date"]):
         allocated_n = _allocated_count(d)
         active_n    = active_user_count(d, story, len(all_users))
         if allocated_n == 0:
@@ -68,7 +63,7 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
 
         snap_ts = f"{d.isoformat()} 12:00:00"
 
-        # Active seats: last_activity_at = snapshot time
+        # Active seats: last_activity_editor set — dashboard counts these as usage
         for user in all_users[:active_n]:
             team_name = user.get("team", "demo-backend")
             team_id   = abs(hash(team_name)) % 90000 + 10000
@@ -81,22 +76,22 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                 f"TIMESTAMP '{snap_ts}', 'enterprise', NULL)"
             )
 
-        # Allocated-but-inactive seats: last_activity_at = NULL
+        # Allocated-but-inactive seats: last_activity_editor = NULL — allocated but not usage
         for i in range(active_n, allocated_n):
             if i < len(all_users):
-                login    = all_users[i]["login"]
-                user_id  = str(all_users[i]["id"])
+                login     = all_users[i]["login"]
+                user_id   = str(all_users[i]["id"])
                 team_name = all_users[i].get("team", "demo-backend")
             else:
-                login    = f"demo-seat-{i + 1}"
-                user_id  = str(900000 + i)
+                login     = f"demo-seat-{i + 1}"
+                user_id   = str(900000 + i)
                 team_name = "demo-backend"
             team_id = abs(hash(team_name)) % 90000 + 10000
             value_lines.append(
                 f"  ({_sql_val(org_name)}, {_sql_val(login)}, "
                 f"{_sql_val(login)}, {_sql_val(user_id)}, "
                 f"{team_id}, {_sql_val(team_name)}, {_sql_val(team_name)}, "
-                f"NULL, NULL, "
+                f"TIMESTAMP '{snap_ts}', NULL, "
                 f"TIMESTAMP '{created_at}', TIMESTAMP '{snap_ts}', NULL, "
                 f"TIMESTAMP '{snap_ts}', 'enterprise', NULL)"
             )
