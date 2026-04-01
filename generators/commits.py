@@ -16,7 +16,7 @@ INSERT_SQL = """\
 INSERT INTO {catalog}.base_datasets.{table}
   (commit_id, commit_date, commit_timestamp, org_name, project_name, project_url,
    cleansed_user_name, cleansed_commit_author, user_id, copilot_commit_flag,
-   lines_added, lines_removed, before_sha, enterprise_id)
+   lines_added, lines_removed, before_sha)
 VALUES
 {values};"""
 
@@ -78,7 +78,7 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                     f"{_sql_val(user['login'])}, {_sql_val(user['login'])}, "
                     f"{user['id']}, {_sql_val(copilot_flag)}, "
                     f"{lines_added}, {lines_removed}, "
-                    f"{_sql_val(before_sha)}, {ent['id']})"
+                    f"{_sql_val(before_sha)})"
                 )
 
     return [INSERT_SQL.format(catalog=catalog, table=TABLE, values=",\n".join(value_lines))]
