@@ -1,6 +1,6 @@
 name: "narrative"
 start_date: "2025-03-25"
-end_date: "2026-04-07"
+end_date: "2026-04-01"
 
 # Trend: values ramp linearly from start to end over the year.
 per_user_per_day_start:
