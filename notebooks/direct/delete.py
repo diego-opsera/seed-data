@@ -40,6 +40,11 @@ consumption_level_name_tables = [
     ("consumption_layer", "ai_assistant_acceptance_info"),
 ]
 
+# ITSM issues scoped by customer_id
+itsm_tables = [
+    ("transform_stage", "mt_itsm_issues_current"),
+]
+
 for schema, table in source_to_stage_tables + org_name_tables:
     n = spark.sql(
         f"DELETE FROM {CATALOG}.{schema}.{table} WHERE org_name = '{TEST_ORG}'"
@@ -61,6 +66,12 @@ for schema, table in consumption_org_name_tables:
 for schema, table in consumption_level_name_tables:
     n = spark.sql(
         f"DELETE FROM {CATALOG}.{schema}.{table} WHERE level_name = '{TEST_ORG}'"
+    ).collect()[0][0]
+    print(f"Deleted {n} rows from {schema}.{table}")
+
+for schema, table in itsm_tables:
+    n = spark.sql(
+        f"DELETE FROM {CATALOG}.{schema}.{table} WHERE customer_id = '{TEST_ORG}'"
     ).collect()[0][0]
     print(f"Deleted {n} rows from {schema}.{table}")
 
@@ -99,6 +110,11 @@ for schema, table in consumption_org_name_tables:
 for schema, table in consumption_level_name_tables:
     n = spark.sql(
         f"SELECT COUNT(*) FROM {CATALOG}.{schema}.{table} WHERE level_name = '{TEST_ORG}'"
+    ).collect()[0][0]
+    print(f"  {schema}.{table}: {n}")
+for schema, table in itsm_tables:
+    n = spark.sql(
+        f"SELECT COUNT(*) FROM {CATALOG}.{schema}.{table} WHERE customer_id = '{TEST_ORG}'"
     ).collect()[0][0]
     print(f"  {schema}.{table}: {n}")
 print(f"  master_data.file_extensions: (not cleaned — shared reference table)")

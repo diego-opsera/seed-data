@@ -12,7 +12,7 @@ import yaml
 from generators import direct_data, commits, seats_usage, org_mapping, ide_org_level
 from generators import code_scan_alert, secret_scan_alert, file_extensions, pull_requests
 from generators import ai_assistant_acceptance, ai_usage_user_level, github_teams_members
-from generators import copilot_billing
+from generators import copilot_billing, itsm_issues
 
 CATALOG = "playground_prod"
 
@@ -42,6 +42,7 @@ statements += [(ai_assistant_acceptance.TABLE, s) for s in ai_assistant_acceptan
 statements += [(ai_usage_user_level.TABLE,       s) for s in ai_usage_user_level.generate(CATALOG, entities_direct, story)]
 statements += [(github_teams_members.TABLE,      s) for s in github_teams_members.generate(CATALOG, entities_direct, story)]
 statements += [(copilot_billing.TABLE,           s) for s in copilot_billing.generate(CATALOG, entities_direct, story)]
+statements += [(itsm_issues.TABLE,              s) for s in itsm_issues.generate(CATALOG, entities_direct, story)]
 
 for i, (table, sql) in enumerate(statements, 1):
     print(f"[{i}/{len(statements)}] {table}...", end=" ")
