@@ -19,9 +19,16 @@ for schema, table in org_scoped_tables:
     n = result.collect()[0][0]
     print(f"Deleted {n} rows from {schema}.{table}")
 
-# Reference table — no org scope, truncate entirely
-spark.sql(f"DELETE FROM {CATALOG}.master_data.file_extensions")
-print("Truncated master_data.file_extensions")
+# Reference table — delete only the extensions we inserted, not the full table
+_OUR_EXTENSIONS = (
+    "'ts','tsx','py','go','cs','ex','exs','js','jsx',"
+    "'java','rb','rs','cpp','kt','swift','php','scala','sh','vue'"
+)
+result = spark.sql(
+    f"DELETE FROM {CATALOG}.master_data.file_extensions "
+    f"WHERE code_file_extension IN ({_OUR_EXTENSIONS})"
+)
+print(f"Deleted {result.collect()[0][0]} rows from master_data.file_extensions")
 
 print("\nVerifying (should all be 0):")
 for schema, table in org_scoped_tables:
