@@ -31,6 +31,22 @@ _SEVERITIES = ["critical", "high", "high", "medium", "medium", "medium", "low", 
 
 _TEAMS = [["demo-backend"], ["demo-frontend"], ["demo-backend", "demo-frontend"]]
 
+# Spike overrides: SEV1 emergency weekend (Mar 7-8 2026) and secondary incident (Nov 18 2025).
+# Weekend days are normally skipped but included here for the outage window.
+# Nov 18 peak is ~50% of the March peak.
+_SPIKE_DAYS = {
+    date(2026, 3, 5):   4,   # Thu — alert volume rising
+    date(2026, 3, 6):   6,   # Fri — escalation
+    date(2026, 3, 7):  10,   # Sat — SEV1 peak (emergency weekend)
+    date(2026, 3, 8):   8,   # Sun — SEV1 peak
+    date(2026, 3, 9):   6,   # Mon — still elevated
+    date(2026, 3, 10):  3,   # Tue — tapering off
+    date(2025, 11, 17): 2,   # Mon — secondary incident buildup
+    date(2025, 11, 18): 5,   # Tue — secondary peak (~50% of March)
+    date(2025, 11, 19): 3,   # Wed — tapering
+    date(2025, 11, 20): 2,   # Thu — tapering
+}
+
 
 def generate(catalog: str, entities: dict, story: dict) -> list[str]:
     org_name = entities["orgs"][0]["name"]
@@ -41,12 +57,14 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
     value_lines = []
 
     for d in date_range(story["start_date"], story["end_date"]):
-        if d.weekday() >= 5:
+        if d in _SPIKE_DAYS:
+            n_alerts = _SPIKE_DAYS[d]
+        elif d.weekday() >= 5:
             continue
-
-        day_rng = random.Random(hash((str(d), "code_scan_count")) % (2**31))
-        # ~0.8 alerts per weekday = ~4/week
-        n_alerts = day_rng.choices([0, 1, 2], weights=[40, 45, 15])[0]
+        else:
+            day_rng = random.Random(hash((str(d), "code_scan_count")) % (2**31))
+            # ~0.8 alerts per weekday = ~4/week
+            n_alerts = day_rng.choices([0, 1, 2], weights=[40, 45, 15])[0]
 
         for seq in range(n_alerts):
             rng = random.Random(hash((str(d), seq, "code_scan")) % (2**31))

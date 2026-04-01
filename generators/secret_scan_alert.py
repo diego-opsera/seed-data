@@ -29,6 +29,20 @@ _SEVERITIES = ["critical", "high", "high", "medium", "medium", "low"]
 
 _TEAMS = [["demo-backend"], ["demo-frontend"], ["demo-backend", "demo-frontend"]]
 
+# Mirrors the code_scan spikes at roughly half the volume.
+_SPIKE_DAYS = {
+    date(2026, 3, 5):   2,
+    date(2026, 3, 6):   3,
+    date(2026, 3, 7):   5,   # SEV1 peak
+    date(2026, 3, 8):   4,
+    date(2026, 3, 9):   3,
+    date(2026, 3, 10):  1,
+    date(2025, 11, 17): 1,
+    date(2025, 11, 18): 3,   # secondary peak
+    date(2025, 11, 19): 2,
+    date(2025, 11, 20): 1,
+}
+
 
 def generate(catalog: str, entities: dict, story: dict) -> list[str]:
     org_name = entities["orgs"][0]["name"]
@@ -39,12 +53,14 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
     value_lines = []
 
     for d in date_range(story["start_date"], story["end_date"]):
-        if d.weekday() >= 5:
+        if d in _SPIKE_DAYS:
+            n_alerts = _SPIKE_DAYS[d]
+        elif d.weekday() >= 5:
             continue
-
-        day_rng = random.Random(hash((str(d), "secret_scan_count")) % (2**31))
-        # ~0.4 alerts per weekday = ~2/week
-        n_alerts = day_rng.choices([0, 1], weights=[60, 40])[0]
+        else:
+            day_rng = random.Random(hash((str(d), "secret_scan_count")) % (2**31))
+            # ~0.4 alerts per weekday = ~2/week
+            n_alerts = day_rng.choices([0, 1], weights=[60, 40])[0]
 
         for seq in range(n_alerts):
             rng = random.Random(hash((str(d), seq, "secret_scan")) % (2**31))
