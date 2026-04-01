@@ -68,7 +68,7 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
     value_lines = []
     for d in mondays:
         allocated_n = _allocated_count(d)
-        active_n    = active_user_count(d, story, len(all_users))
+        active_n    = min(active_user_count(d, story, len(all_users)), allocated_n)
         if allocated_n == 0:
             continue
 
