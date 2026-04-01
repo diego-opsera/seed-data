@@ -7,7 +7,7 @@ Drives: Commit Trend, Commit Overview.
 """
 import random
 from datetime import date
-from .utils import date_range, expand_users, active_user_count, lerp, _sql_val
+from .utils import date_range, expand_users, active_user_count, lerp, _sql_val, split_across
 
 
 TABLE = "commits_rest_api"
@@ -16,9 +16,18 @@ INSERT_SQL = """\
 INSERT INTO {catalog}.base_datasets.{table}
   (commit_id, commit_date, commit_timestamp, org_name, project_name, project_url,
    cleansed_user_name, cleansed_commit_author, user_id, copilot_commit_flag,
-   lines_added, lines_removed, before_sha)
+   lines_added, lines_removed, before_sha, file_extension)
 VALUES
 {values};"""
+
+# Maps user language to primary file extension (must match master_data.file_extensions)
+_LANG_EXT = {
+    "typescript": "ts",
+    "python":     "py",
+    "go":         "go",
+    "csharp":     "cs",
+    "elixir":     "ex",
+}
 
 # Projects mapped to user teams
 _TEAM_PROJECT = {
@@ -77,6 +86,17 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                 commit_hour   = c_rng.randint(9, 17)
                 commit_ts     = f"{d.isoformat()} {commit_hour:02d}:00:00"
 
+                ext = _LANG_EXT.get(user.get("language", "python"), "py")
+                n_files = c_rng.randint(1, 3)
+                file_adds = split_across(lines_added, n_files)
+                file_dels = split_across(lines_removed, n_files)
+                file_structs = [
+                    f"NAMED_STRUCT('file_extension', '{ext}', "
+                    f"'lines', NAMED_STRUCT('additions', {file_adds[i]}, 'deletions', {file_dels[i]}))"
+                    for i in range(n_files)
+                ]
+                file_ext_sql = f"ARRAY({', '.join(file_structs)})"
+
                 value_lines.append(
                     f"  ({_sql_val(commit_id)}, {_sql_val(d)}, "
                     f"TIMESTAMP '{commit_ts}', "
@@ -84,7 +104,7 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                     f"{_sql_val(user['login'])}, {_sql_val(user['login'])}, "
                     f"{user['id']}, {_sql_val(copilot_flag)}, "
                     f"{lines_added}, {lines_removed}, "
-                    f"{_sql_val(before_sha)})"
+                    f"{_sql_val(before_sha)}, {file_ext_sql})"
                 )
 
     return [INSERT_SQL.format(catalog=catalog, table=TABLE, values=",\n".join(value_lines))]
