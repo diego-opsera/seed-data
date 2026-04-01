@@ -4,12 +4,13 @@ Generator for source_to_stage.raw_github_copilot_billing.
 One row per (org, week) — feeds v_github_copilot_seats_billing via a JOIN
 with master_data.github_copilot_orgs_mapping.
 
-Columns:
-  org_name, seat_breakdown_total, seat_breakdown_active_this_cycle,
-  seat_breakdown_inactive_this_cycle, seat_breakdown_added_this_cycle,
+The view reads source_record_insert_datetime (not record_insert_datetime) and
+also expects seat_management_setting. Column list confirmed from view definition:
+  org_name, seat_management_setting, public_code_suggestions, cli, ide_chat,
+  seat_breakdown_total, seat_breakdown_added_this_cycle,
+  seat_breakdown_active_this_cycle, seat_breakdown_inactive_this_cycle,
   seat_breakdown_pending_invitation, seat_breakdown_pending_cancellation,
-  plan_type, public_code_suggestions, ide_chat, platform_chat, cli,
-  record_insert_datetime
+  source_record_insert_datetime
 
 seat_breakdown_total  = allocated seats (quarterly step-function matching seats_usage)
 active_this_cycle     = number of active seats for that week
@@ -23,11 +24,12 @@ SCHEMA = "source_to_stage"
 
 INSERT_SQL = """\
 INSERT INTO {catalog}.source_to_stage.raw_github_copilot_billing
-  (org_name, seat_breakdown_total, seat_breakdown_active_this_cycle,
+  (org_name, seat_management_setting,
+   seat_breakdown_total, seat_breakdown_active_this_cycle,
    seat_breakdown_inactive_this_cycle, seat_breakdown_added_this_cycle,
    seat_breakdown_pending_invitation, seat_breakdown_pending_cancellation,
-   plan_type, public_code_suggestions, ide_chat, platform_chat, cli,
-   record_insert_datetime)
+   public_code_suggestions, ide_chat, cli,
+   source_record_insert_datetime)
 VALUES
 {values};"""
 
@@ -49,7 +51,7 @@ def _allocated_count(d: date) -> int:
 
 
 def generate(catalog: str, entities: dict, story: dict) -> list[str]:
-    org_name  = entities["orgs"][0]["name"]   # demo-acme-direct (entities_direct has orgs[1] remapped to [0])
+    org_name  = entities["orgs"][0]["name"]   # demo-acme-direct (entities_direct remaps orgs[1] -> [0])
     all_users = expand_users(entities, story)
 
     mondays = [
@@ -65,9 +67,9 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
         snap_ts     = f"{d.isoformat()} 12:00:00"
 
         value_lines.append(
-            f"  ({_sql_val(org_name)}, "
+            f"  ({_sql_val(org_name)}, 'assign_all', "
             f"{allocated_n}, {active_n}, {inactive_n}, 0, 0, 0, "
-            f"'enterprise', 'disabled', 'enabled', 'enabled', 'enabled', "
+            f"'disabled', 'enabled', 'enabled', "
             f"TIMESTAMP '{snap_ts}')"
         )
 
