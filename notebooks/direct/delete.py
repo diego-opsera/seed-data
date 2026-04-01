@@ -20,6 +20,7 @@ org_name_tables = [
     ("base_datasets",   "trf_github_copilot_direct_data"),
     ("base_datasets",   "commits_rest_api"),
     ("source_to_stage", "raw_github_copilot_seats"),
+    ("source_to_stage", "raw_github_copilot_billing"),
     ("master_data",     "github_copilot_orgs_mapping"),
     ("base_datasets",   "github_copilot_metrics_ide_org_level"),
 ]
