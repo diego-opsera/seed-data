@@ -10,11 +10,12 @@ This is a reference table — insert-once, no date-range dependency.
 TABLE  = "file_extensions"
 SCHEMA = "master_data"
 
-INSERT_SQL = """\
-INSERT INTO {catalog}.master_data.file_extensions
-  (code_file_extension, code_language)
-VALUES
-{values};"""
+MERGE_SQL = """\
+MERGE INTO {catalog}.master_data.file_extensions AS target
+USING (VALUES {values}) AS source(code_file_extension, code_language)
+ON target.code_file_extension = source.code_file_extension
+WHEN NOT MATCHED THEN INSERT (code_file_extension, code_language)
+  VALUES (source.code_file_extension, source.code_language);"""
 
 # Covers the five languages in entities.yaml plus common others.
 # Extensions must match the values generated in commits.py file_extension arrays.
@@ -43,4 +44,4 @@ _MAPPINGS = [
 
 def generate(catalog: str, entities: dict, story: dict) -> list[str]:
     value_lines = [f"  ('{ext}', '{lang}')" for ext, lang in _MAPPINGS]
-    return [INSERT_SQL.format(catalog=catalog, values=",\n".join(value_lines))]
+    return [MERGE_SQL.format(catalog=catalog, values=",\n".join(value_lines))]

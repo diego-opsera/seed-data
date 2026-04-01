@@ -19,16 +19,10 @@ for schema, table in org_scoped_tables:
     n = result.collect()[0][0]
     print(f"Deleted {n} rows from {schema}.{table}")
 
-# Reference table — delete only the extensions we inserted, not the full table
-_OUR_EXTENSIONS = (
-    "'ts','tsx','py','go','cs','ex','exs','js','jsx',"
-    "'java','rb','rs','cpp','kt','swift','php','scala','sh','vue'"
-)
-result = spark.sql(
-    f"DELETE FROM {CATALOG}.master_data.file_extensions "
-    f"WHERE code_file_extension IN ({_OUR_EXTENSIONS})"
-)
-print(f"Deleted {result.collect()[0][0]} rows from master_data.file_extensions")
+# file_extensions is a shared reference table cloned from opsera_test.
+# The insert uses MERGE (insert-if-not-exists), so pre-existing rows are
+# never duplicated and never ours to delete. No cleanup needed here.
+print("Skipped master_data.file_extensions (shared reference table — MERGE insert only)")
 
 print("\nVerifying (should all be 0):")
 for schema, table in org_scoped_tables:
@@ -36,5 +30,4 @@ for schema, table in org_scoped_tables:
         f"SELECT COUNT(*) FROM {CATALOG}.{schema}.{table} WHERE org_name = '{TEST_ORG}'"
     ).collect()[0][0]
     print(f"  {schema}.{table}: {n}")
-n = spark.sql(f"SELECT COUNT(*) FROM {CATALOG}.master_data.file_extensions").collect()[0][0]
-print(f"  master_data.file_extensions: {n}")
+print(f"  master_data.file_extensions: (not cleaned — shared reference table)")
