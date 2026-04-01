@@ -6,8 +6,8 @@ spark.sql("WITH variables AS (SELECT DATE('2026-01-31') AS start_date, DATE('202
 print("=== consumption_layer.commits_prs ===")
 spark.sql("SELECT COUNT(*) as cnt FROM playground_prod.consumption_layer.commits_prs WHERE org_name = 'demo-acme-direct'").show()
 
-print("=== ai_assistant_acceptance_info by tool and org ===")
-spark.sql("SELECT ai_assistant_tool_name, level_name, COUNT(*) as cnt FROM playground_prod.consumption_layer.ai_assistant_acceptance_info GROUP BY ai_assistant_tool_name, level_name ORDER BY cnt DESC LIMIT 10").show(10, False)
+print("=== ai_assistant_acceptance_info sample row for OpseraEngineering ===")
+spark.sql("SELECT * FROM playground_prod.consumption_layer.ai_assistant_acceptance_info WHERE level_name = 'OpseraEngineering' LIMIT 3").show(3, False)
 
-print("=== consumption_layer.ai_code_assistant_usage_user_level ===")
-spark.sql("SELECT COUNT(*) as cnt FROM playground_prod.consumption_layer.ai_code_assistant_usage_user_level WHERE org_name = 'demo-acme-direct'").show()
+print("=== ai_code_assistant_usage_user_level columns ===")
+spark.sql("DESCRIBE playground_prod.consumption_layer.ai_code_assistant_usage_user_level").show(30, False)
