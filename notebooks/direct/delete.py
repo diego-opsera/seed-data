@@ -11,10 +11,11 @@ tables = [
 ]
 
 for schema, table in tables:
-    spark.sql(
+    result = spark.sql(
         f"DELETE FROM {CATALOG}.{schema}.{table} WHERE org_name = '{TEST_ORG}'"
     )
-    print(f"Deleted from {schema}.{table}")
+    n = result.collect()[0][0]
+    print(f"Deleted {n} rows from {schema}.{table}")
 
 print("\nVerifying (should all be 0):")
 for schema, table in tables:
