@@ -12,6 +12,14 @@ org_scoped_tables = [
     ("base_datasets",   "secret_scan_alert"),
 ]
 
+# pull_requests is shared — only delete rows we seeded (scoped by merge_request_id prefix)
+result = spark.sql(
+    f"DELETE FROM {CATALOG}.base_datasets.pull_requests "
+    f"WHERE merge_request_id LIKE 'demo-seed-pr-%'"
+)
+print(f"Deleted {result.collect()[0][0]} rows from base_datasets.pull_requests")
+
+
 for schema, table in org_scoped_tables:
     result = spark.sql(
         f"DELETE FROM {CATALOG}.{schema}.{table} WHERE org_name = '{TEST_ORG}'"
@@ -31,3 +39,8 @@ for schema, table in org_scoped_tables:
     ).collect()[0][0]
     print(f"  {schema}.{table}: {n}")
 print(f"  master_data.file_extensions: (not cleaned — shared reference table)")
+n = spark.sql(
+    f"SELECT COUNT(*) FROM {CATALOG}.base_datasets.pull_requests "
+    f"WHERE merge_request_id LIKE 'demo-seed-pr-%'"
+).collect()[0][0]
+print(f"  base_datasets.pull_requests (demo-seed-pr-* only): {n}")

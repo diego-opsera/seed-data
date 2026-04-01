@@ -10,7 +10,7 @@ os.chdir("/tmp/seed-data")
 
 import yaml
 from generators import direct_data, commits, seats_usage, org_mapping, ide_org_level
-from generators import code_scan_alert, secret_scan_alert, file_extensions
+from generators import code_scan_alert, secret_scan_alert, file_extensions, pull_requests
 
 CATALOG = "playground_prod"
 
@@ -35,6 +35,7 @@ statements += [(ide_org_level.TABLE,    s) for s in ide_org_level.generate(CATAL
 statements += [(file_extensions.TABLE,  s) for s in file_extensions.generate(CATALOG, entities, story)]
 statements += [(code_scan_alert.TABLE,  s) for s in code_scan_alert.generate(CATALOG, entities_direct, story)]
 statements += [(secret_scan_alert.TABLE, s) for s in secret_scan_alert.generate(CATALOG, entities_direct, story)]
+statements += [(pull_requests.TABLE,    s) for s in pull_requests.generate(CATALOG, entities_direct, story)]
 
 for i, (table, sql) in enumerate(statements, 1):
     print(f"[{i}/{len(statements)}] {table}...", end=" ")
