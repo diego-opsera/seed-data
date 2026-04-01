@@ -29,6 +29,6 @@ print(f"\nAll {len(statements)} rows inserted.")
 
 n = spark.sql(
     "SELECT COUNT(*) FROM playground_prod.consumption_layer.release_management_detail"
-    " WHERE level_value = 'demo-acme-corp'"
+    " WHERE fix_version LIKE 'demo-%'"
 ).collect()[0][0]
-print(f"Verification: {n} rows in table with level_value = 'demo-acme-corp'")
+print(f"Verification: {n} rows with fix_version LIKE 'demo-%'")

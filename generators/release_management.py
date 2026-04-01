@@ -27,15 +27,17 @@ INSERT INTO {catalog}.consumption_layer.release_management_detail
 VALUES
 {values};"""
 
+# fix_version prefixed with 'demo-' so delete can safely target LIKE 'demo-%'
+# level_value must match the dashboard's configured project IDs
 _RELEASES = [
-    ("v2025.1", "ACME-BACKEND",  date(2025, 1,  6), date(2025, 1, 31), "released"),
-    ("v2025.2", "ACME-BACKEND",  date(2025, 4,  1), date(2025, 4, 30), "released"),
-    ("v2025.3", "ACME-BACKEND",  date(2025, 7,  1), date(2025, 7, 31), "released"),
-    ("v2025.4", "ACME-BACKEND",  date(2025, 10, 1), date(2025, 10, 31), "unreleased"),
-    ("v2025.1", "ACME-FRONTEND", date(2025, 1,  6), date(2025, 1, 31), "released"),
-    ("v2025.2", "ACME-FRONTEND", date(2025, 4,  1), date(2025, 4, 30), "released"),
-    ("v2025.3", "ACME-FRONTEND", date(2025, 7,  1), date(2025, 7, 31), "released"),
-    ("v2025.4", "ACME-FRONTEND", date(2025, 10, 1), date(2025, 10, 31), "unreleased"),
+    ("demo-v2025.1", "Insights",     date(2025, 1,  6), date(2025, 1, 31), "released"),
+    ("demo-v2025.2", "Insights",     date(2025, 4,  1), date(2025, 4, 30), "released"),
+    ("demo-v2025.3", "Insights",     date(2025, 7,  1), date(2025, 7, 31), "released"),
+    ("demo-v2025.4", "Insights",     date(2025, 10, 1), date(2025, 10, 31), "unreleased"),
+    ("demo-v2025.1", "project_001",  date(2025, 1,  6), date(2025, 1, 31), "released"),
+    ("demo-v2025.2", "project_001",  date(2025, 4,  1), date(2025, 4, 30), "released"),
+    ("demo-v2025.3", "project_001",  date(2025, 7,  1), date(2025, 7, 31), "released"),
+    ("demo-v2025.4", "project_001",  date(2025, 10, 1), date(2025, 10, 31), "unreleased"),
 ]
 
 _AUTHORS = [
@@ -309,7 +311,7 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
         user_release = release_dt.strftime("%Y-%m-%d")
 
         row = (
-            f"('enterprise', '{enterprise_name}', "
+            f"('level_1', '{project}', "
             f"'{fix_version}', '{project}', "
             f"'{user_start}', '{user_release}', "
             f"'{start_dt}', '{release_dt}', '{status}', "
