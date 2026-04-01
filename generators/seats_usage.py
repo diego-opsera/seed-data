@@ -54,8 +54,19 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
 
     created_at = f"{start.isoformat()} 00:00:00"
 
+    # TODO: daily inserts would make the daily chart view work correctly, but the
+    # dashboard currently groups both Allocated and Usage by last_activity_at date,
+    # so inactive allocated seats (last_activity_editor=NULL) collapse to the same
+    # date as active ones and get counted as usage. Needs dashboard query investigation
+    # before switching to daily granularity.
+
+    mondays = [
+        d for d in date_range(story["start_date"], story["end_date"])
+        if d.weekday() == 0
+    ]
+
     value_lines = []
-    for d in date_range(story["start_date"], story["end_date"]):
+    for d in mondays:
         allocated_n = _allocated_count(d)
         active_n    = active_user_count(d, story, len(all_users))
         if allocated_n == 0:

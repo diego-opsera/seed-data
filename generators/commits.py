@@ -66,15 +66,14 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                 commit_id  = _fake_sha(c_seed)
                 before_sha = _fake_sha(c_seed + 1)  # one parent = non-merge commit
                 copilot_flag = "Y" if c_rng.random() < copilot_rate else "N"
-                # Scale line counts with story trend so total commit lines stay ~1.5x
+                # Scale line counts with story trend so total commit lines stay ~2x
                 # copilot accepted lines throughout the year (accepted lines grow 4x as
                 # loc_suggested_to_add ramps from 75→300).
-                add_lo = round(lerp(5,  30, t))
-                add_hi = round(lerp(30, 100, t))
-                rem_lo = round(lerp(0,  0,  t))
-                rem_hi = round(lerp(10, 35, t))
+                add_lo = round(lerp(10,  60, t))
+                add_hi = round(lerp(60, 200, t))
+                rem_hi = round(lerp(20,  70, t))
                 lines_added   = c_rng.randint(add_lo, add_hi)
-                lines_removed = c_rng.randint(rem_lo, rem_hi)
+                lines_removed = c_rng.randint(0, rem_hi)
                 commit_hour   = c_rng.randint(9, 17)
                 commit_ts     = f"{d.isoformat()} {commit_hour:02d}:00:00"
 
