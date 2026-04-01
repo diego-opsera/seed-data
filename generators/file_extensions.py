@@ -12,7 +12,10 @@ SCHEMA = "master_data"
 
 MERGE_SQL = """\
 MERGE INTO {catalog}.master_data.file_extensions AS target
-USING (VALUES {values}) AS source(code_file_extension, code_language)
+USING (
+  SELECT col1 AS code_file_extension, col2 AS code_language
+  FROM VALUES {values} AS t(col1, col2)
+) AS source
 ON target.code_file_extension = source.code_file_extension
 WHEN NOT MATCHED THEN INSERT (code_file_extension, code_language)
   VALUES (source.code_file_extension, source.code_language);"""
