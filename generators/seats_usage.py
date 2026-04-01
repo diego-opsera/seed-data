@@ -102,7 +102,7 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                 f"  ({_sql_val(org_name)}, {_sql_val(login)}, "
                 f"{_sql_val(login)}, {_sql_val(user_id)}, "
                 f"{team_id}, {_sql_val(team_name)}, {_sql_val(team_name)}, "
-                f"TIMESTAMP '{snap_ts}', NULL, "
+                f"NULL, NULL, "
                 f"TIMESTAMP '{created_at}', TIMESTAMP '{snap_ts}', NULL, "
                 f"TIMESTAMP '{snap_ts}', 'enterprise', NULL)"
             )
