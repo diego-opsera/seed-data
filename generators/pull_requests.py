@@ -38,9 +38,9 @@ VALUES
 {values};"""
 
 _REPOS = [
-    ("demo-acme-corp/backend",     "https://github.com/demo-acme-corp/backend"),
-    ("demo-acme-corp/frontend",    "https://github.com/demo-acme-corp/frontend"),
-    ("demo-acme-corp/api-gateway", "https://github.com/demo-acme-corp/api-gateway"),
+    ("demo-acme-direct/backend",     "https://github.com/demo-acme-direct/backend"),
+    ("demo-acme-direct/frontend",    "https://github.com/demo-acme-direct/frontend"),
+    ("demo-acme-direct/api-gateway", "https://github.com/demo-acme-direct/api-gateway"),
 ]
 
 # Copilot adoption: fraction of PRs that are Copilot, grows 20% → 65%
