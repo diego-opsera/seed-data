@@ -48,3 +48,12 @@ All affect the demo-acme-direct playground instance.
 **Root cause:** These tables are ETL-derived from base tables. The consumption layer pipeline has not been run against the seeded base data.
 **Fix:** Either run the consumption layer pipeline against playground_prod for demo-acme-direct, or document which base tables must be seeded to allow direct insertion into the consumption layer tables (bypassing ETL).
 **Note:** `ai_assistant_acceptance_info` and `ai_code_assistant_usage_user_level` were successfully seeded directly (generators exist). `commits_prs` still needs ETL or a direct-seed generator.
+
+---
+
+## 6. Jira Issues Analysis shows 0 despite seeded data
+
+**Chart:** Executive Summary (Page 2) → "Jira Issues Analysis" bullet
+**Symptom:** "0 issues resolved with Copilot assistance out of 0 total resolved issues" even though `transform_stage.mt_itsm_issues_current` has 266 rows for `customer_id = 'demo-acme-direct'` and `base_datasets.v_itsm_issues_current` surfaces them correctly.
+**Root cause:** The backend appears to gate on an active Jira integration being configured in Opsera MongoDB for the org before it queries Databricks ITSM data. Playground/demo instances have no real Jira integration, so the backend short-circuits and returns 0. Attempted inserting a row into `master_data.data_mapping` (Databricks mirror of MongoDB config) with the demo user's ID — ineffective if the backend reads MongoDB directly rather than this table.
+**Fix:** Either (a) have the data team configure a mock Jira integration in Opsera MongoDB for the `demo-acme-direct` org, or (b) modify the backend to fall back to `customer_id`-based ITSM queries when no integration is configured (similar to the SCM filter issue in Bug #3).
