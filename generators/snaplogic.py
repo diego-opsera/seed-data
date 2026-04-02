@@ -124,14 +124,19 @@ def _build_daily_state(story: dict):
     Pre-compute per-day, per-Snaplex state so snaplex and node tables are
     consistent (running_nodes_count matches actual node statuses).
 
+    Utilization uses a momentum-based "drifting base" so consecutive days are
+    correlated (no more independent white noise). Weekly and monthly rhythms
+    are layered on top, plus a hard-coded Q1-end capacity incident on 2026-03-18.
+
+    Incident — 2026-03-18 (Q1 end-of-quarter pipeline crunch):
+      Mar 16-17: Pre-incident surge, prod utilization climbs to 90-95%
+      Mar 18:    2 of 4 prod nodes fail under load → cc_status='alert',
+                 node_availability ~50%, headroom collapses
+      Mar 19:    Partial recovery (1 node restored)
+      Mar 20+:   Full recovery, utilization normalises
+
     Returns a dict keyed by (date, instance_id):
-      {
-        "cc_status": str,
-        "running": int,
-        "down": int,
-        "reserved_slots": int,
-        "node_statuses": [str, ...]   # one per node
-      }
+      { "cc_status", "running", "down", "reserved", "util", "node_statuses" }
     """
     state = {}
     rng = random.Random(43)
@@ -140,49 +145,87 @@ def _build_daily_state(story: dict):
     story_end   = date.fromisoformat(story["end_date"])
     total_days  = max((story_end - story_start).days, 1)
 
+    INCIDENT_DATE = date(2026, 3, 18)
+
+    # Per-Snaplex drifting utilization base, seeded to the story start
+    # Each day the base drifts ±drift_speed, clamped to [floor, ceiling].
+    drift_base = {sx[0]: lerp(0.42, 0.55, 0) for sx in _SNAPLEXES}
+
     for d in date_range(story["start_date"], story["end_date"]):
-        # Progress through story (0 → 1) drives the upward utilization trend
-        t = (d - story_start).days / total_days
+        t          = (d - story_start).days / total_days
+        is_weekend = d.weekday() >= 5
+        dow        = d.weekday()          # 0=Mon … 6=Sun
+        is_eom     = d.day >= 27          # end-of-month reporting push
+
+        # Incident window relative to INCIDENT_DATE
+        incident_delta = (d - INCIDENT_DATE).days   # negative = before, 0 = day-of
 
         for (inst_id, _label, _env, _loc, max_slots, _mem,
              node_count, uptime_pct, _cpu, _mem_gb) in _SNAPLEXES:
 
-            # Determine overall Snaplex status for the day
-            r = rng.random()
-            if r < uptime_pct:
-                cc_status = "up_and_running"
-            elif r < uptime_pct + 0.06:
+            is_prod = "prod" in inst_id
+
+            # ── Drift the per-Snaplex utilization base ───────────────────────
+            # Target: slow upward trend over the year, faster drift on weekdays
+            trend_target = lerp(0.45, 0.78, t)
+            pull         = (trend_target - drift_base[inst_id]) * 0.08   # gentle pull toward trend
+            drift        = rng.uniform(-0.04, 0.04) + pull
+            drift_base[inst_id] = max(0.10, min(0.95, drift_base[inst_id] + drift))
+
+            # ── Day-of-week rhythm ───────────────────────────────────────────
+            # Mon=1.05, Tue/Wed/Thu=1.10, Fri=0.90, Sat=0.35, Sun=0.25
+            dow_mult = [1.05, 1.10, 1.10, 1.10, 0.90, 0.35, 0.25][dow]
+
+            # ── End-of-month burst ───────────────────────────────────────────
+            eom_mult = 1.12 if (is_eom and not is_weekend) else 1.0
+
+            # ── Incident override (prod only) ────────────────────────────────
+            if is_prod:
+                if incident_delta == -2:    # Mar 16: pre-surge begins
+                    eom_mult *= 1.25
+                elif incident_delta == -1:  # Mar 17: surge peak
+                    eom_mult *= 1.40
+                elif incident_delta == 0:   # Mar 18: incident day
+                    eom_mult *= 1.45
+                elif incident_delta == 1:   # Mar 19: partial recovery
+                    eom_mult *= 0.85
+                # Mar 20+ normalises naturally via drift
+
+            # ── Final utilization ────────────────────────────────────────────
+            raw_util = drift_base[inst_id] * dow_mult * eom_mult
+            util     = max(0.05, min(0.98, raw_util))
+
+            # ── Incident: force prod Snaplex to alert on Mar 18-19 ───────────
+            if is_prod and incident_delta in (0, 1):
                 cc_status = "alert"
             else:
-                cc_status = "not_running"
+                r = rng.random()
+                if r < uptime_pct:
+                    cc_status = "up_and_running"
+                elif r < uptime_pct + 0.06:
+                    cc_status = "alert"
+                else:
+                    cc_status = "not_running"
 
-            # Node statuses consistent with Snaplex status
+            # ── Node statuses ────────────────────────────────────────────────
             node_statuses = []
-            for _ in range(node_count):
-                if cc_status == "up_and_running":
+            for ni in range(node_count):
+                if is_prod and incident_delta == 0:
+                    # Mar 18: nodes 3 and 4 go down
+                    node_statuses.append("down" if ni >= 2 else "running")
+                elif is_prod and incident_delta == 1:
+                    # Mar 19: node 3 restored, node 4 still down
+                    node_statuses.append("down" if ni == 3 else "running")
+                elif cc_status == "up_and_running":
                     node_statuses.append("running" if rng.random() > 0.02 else "down")
                 elif cc_status == "alert":
                     node_statuses.append("running" if rng.random() > 0.40 else "down")
                 else:
                     node_statuses.append("down")
 
-            running = node_statuses.count("running")
-            down    = node_statuses.count("down")
-
-            # Slot utilization: weekdays trend from ~45% → ~80% over the story;
-            # weekends/holidays stay low (~15–35%) to show a clear usage pattern.
-            if cc_status == "up_and_running":
-                is_weekend = d.weekday() >= 5
-                if is_weekend:
-                    base_util = lerp(0.15, 0.30, t)
-                    noise     = rng.uniform(-0.05, 0.05)
-                else:
-                    base_util = lerp(0.45, 0.80, t)
-                    noise     = rng.uniform(-0.08, 0.08)
-                util      = max(0.05, min(0.98, base_util + noise))
-                reserved  = int(max_slots * util)
-            else:
-                reserved  = 0
+            running  = node_statuses.count("running")
+            down     = node_statuses.count("down")
+            reserved = int(max_slots * util) if cc_status != "not_running" else 0
 
             state[(d, inst_id)] = {
                 "cc_status":     cc_status,
