@@ -77,6 +77,30 @@ _ASSETS   = [
 # (event_type, cumulative_weight)
 _EVENT_CDF = [("asset_create", 0.30), ("asset_update", 0.85), ("asset_delete", 1.00)]
 
+# Additional users whose first activity is staggered across the story period.
+# Each tuple: (email, days_offset_from_story_start)
+# Spread ~18 users across ~370 days so every monthly/weekly bucket gets new users.
+_ONBOARDING_USERS = [
+    ("demo-snaplogic-user-01@acme.com",  20),
+    ("demo-snaplogic-user-02@acme.com",  45),
+    ("demo-snaplogic-user-03@acme.com",  60),
+    ("demo-snaplogic-user-04@acme.com",  80),
+    ("demo-snaplogic-user-05@acme.com", 100),
+    ("demo-snaplogic-user-06@acme.com", 120),
+    ("demo-snaplogic-user-07@acme.com", 140),
+    ("demo-snaplogic-user-08@acme.com", 160),
+    ("demo-snaplogic-user-09@acme.com", 185),
+    ("demo-snaplogic-user-10@acme.com", 210),
+    ("demo-snaplogic-user-11@acme.com", 230),
+    ("demo-snaplogic-user-12@acme.com", 250),
+    ("demo-snaplogic-user-13@acme.com", 270),
+    ("demo-snaplogic-user-14@acme.com", 290),
+    ("demo-snaplogic-user-15@acme.com", 310),
+    ("demo-snaplogic-user-16@acme.com", 330),
+    ("demo-snaplogic-user-17@acme.com", 350),
+    ("demo-snaplogic-user-18@acme.com", 365),
+]
+
 
 def _weighted_event(r):
     for ev, cdf in _EVENT_CDF:
@@ -221,13 +245,27 @@ def generate_activities(catalog: str, entities: dict, story: dict) -> list[str]:
     rows = []
     envs = ["production", "development", "staging"]
 
+    from datetime import date
+    story_start = date.fromisoformat(story["start_date"])
+
+    # Build a set of (user, first_active_date) for onboarding users
+    onboarding = {
+        user: story_start + timedelta(days=offset)
+        for user, offset in _ONBOARDING_USERS
+    }
+
     for d in date_range(story["start_date"], story["end_date"]):
         # Minimal weekend activity
         if d.weekday() >= 5 and rng.random() > 0.10:
             continue
 
-        for user in _USERS:
-            if rng.random() > 0.70:  # ~70% chance a user is active on a given weekday
+        # Core users: active throughout
+        active_users = list(_USERS)
+        # Onboarding users: active from their first date onwards
+        active_users += [u for u, first in onboarding.items() if d >= first]
+
+        for user in active_users:
+            if rng.random() > 0.70:  # ~70% chance active on a given day
                 continue
 
             n_events = rng.randint(1, 5)
