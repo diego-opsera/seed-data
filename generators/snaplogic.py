@@ -22,9 +22,9 @@ consistent.
 """
 
 import random
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
-from .utils import date_range, _sql_val
+from .utils import date_range, lerp, _sql_val
 
 TABLE_SNAPLEX    = "raw_snaplogic_snaplex"
 TABLE_NODES      = "raw_snaplogic_snaplex_nodes"
@@ -136,7 +136,14 @@ def _build_daily_state(story: dict):
     state = {}
     rng = random.Random(43)
 
+    story_start = date.fromisoformat(story["start_date"])
+    story_end   = date.fromisoformat(story["end_date"])
+    total_days  = max((story_end - story_start).days, 1)
+
     for d in date_range(story["start_date"], story["end_date"]):
+        # Progress through story (0 → 1) drives the upward utilization trend
+        t = (d - story_start).days / total_days
+
         for (inst_id, _label, _env, _loc, max_slots, _mem,
              node_count, uptime_pct, _cpu, _mem_gb) in _SNAPLEXES:
 
@@ -161,13 +168,28 @@ def _build_daily_state(story: dict):
 
             running = node_statuses.count("running")
             down    = node_statuses.count("down")
-            reserved = int(max_slots * rng.uniform(0.40, 0.85)) if cc_status == "up_and_running" else 0
+
+            # Slot utilization: weekdays trend from ~45% → ~80% over the story;
+            # weekends/holidays stay low (~15–35%) to show a clear usage pattern.
+            if cc_status == "up_and_running":
+                is_weekend = d.weekday() >= 5
+                if is_weekend:
+                    base_util = lerp(0.15, 0.30, t)
+                    noise     = rng.uniform(-0.05, 0.05)
+                else:
+                    base_util = lerp(0.45, 0.80, t)
+                    noise     = rng.uniform(-0.08, 0.08)
+                util      = max(0.05, min(0.98, base_util + noise))
+                reserved  = int(max_slots * util)
+            else:
+                reserved  = 0
 
             state[(d, inst_id)] = {
-                "cc_status":    cc_status,
-                "running":      running,
-                "down":         down,
-                "reserved":     reserved,
+                "cc_status":     cc_status,
+                "running":       running,
+                "down":          down,
+                "reserved":      reserved,
+                "util":          reserved / max_slots if max_slots else 0,
                 "node_statuses": node_statuses,
             }
 
@@ -216,9 +238,12 @@ def generate_nodes(catalog: str, entities: dict, story: dict) -> list[str]:
                 node_label = f"{label} Node {n + 1}"
                 node_status = s["node_statuses"][n]
 
-                # Hardware specs: stable with minor jitter
-                total_mem  = round(base_mem_gb + rng.uniform(-2.0, 2.0), 2)
-                jvm_mem    = round(total_mem * rng.uniform(0.20, 0.35), 2)
+                # Memory: hardware total is stable (±3%); JVM heap scales
+                # with the day's slot utilization so it rises and falls with load.
+                util       = s["util"]
+                total_mem  = round(base_mem_gb * rng.uniform(0.97, 1.03), 2)
+                jvm_pct    = lerp(0.20, 0.45, util) + rng.uniform(-0.03, 0.03)
+                jvm_mem    = round(total_mem * max(0.10, min(0.55, jvm_pct)), 2)
                 swap_bytes = rng.choice([8_589_934_592, 17_179_869_184])  # 8 GB or 16 GB
                 max_fds    = 65536
                 create_ts  = datetime(d.year, d.month, d.day,
@@ -245,7 +270,6 @@ def generate_activities(catalog: str, entities: dict, story: dict) -> list[str]:
     rows = []
     envs = ["production", "development", "staging"]
 
-    from datetime import date
     story_start = date.fromisoformat(story["start_date"])
 
     # Build a set of (user, first_active_date) for onboarding users
