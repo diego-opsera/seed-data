@@ -2,23 +2,38 @@
 Generators for SnapLogic dashboard source tables.
 
 Three tables in {catalog}.source_to_stage:
-  - raw_snaplogic_snaplex       : one state row per Snaplex per day
-  - raw_snaplogic_snaplex_nodes : one snapshot row per node per day
+  - raw_snaplogic_snaplex       : state-change event records (NOT a daily time-series)
+  - raw_snaplogic_snaplex_nodes : one snapshot per RUNNING node per day
   - raw_snaplogic_activities    : user activity events
 
 All rows scoped to org='demo-acme-direct' for safe, targeted deletion.
 
-Data design
------------
-Three Snaplexes across three environments:
-  - demo-snaplex-prod    : 4 nodes, production,  ~95% up
-  - demo-snaplex-dev     : 2 nodes, development, ~85% up
-  - demo-snaplex-staging : 2 nodes, staging,     ~88% up
+Why raw_snaplogic_snaplex is a state-change log, not a daily series
+--------------------------------------------------------------------
+The trend chart queries (slot-utilization, node-availability, etc.) join
+raw_snaplogic_snaplex to raw_snaplogic_snaplex_nodes on instance_id ONLY —
+no date correlation. Every bucket therefore gets every Snaplex row via
+cross-product and computes the same average → flat line regardless of how
+many daily rows we insert.
 
-Nodes share the same instance_id as their parent Snaplex (snaplex_instance_id).
-running_nodes_count / down_nodes_count in the snaplex row are derived from
-the actual node statuses generated for that day, keeping the two tables
-consistent.
+The queries were designed for a sparse event log: one row per Snaplex per
+state change. This gives:
+  • Ratio charts (slot util, headroom, node avail): flat at a weighted mean
+    of the state periods — acceptable and meaningful.
+  • Count charts (status distribution): varies because the cross-product
+    count differs per bucket depending on how many node dates fall in it.
+  • Node-level trend charts (total memory, CPU, JVM, swap): go directly to
+    raw_snaplogic_snaplex_nodes without joining snaplex — fully dynamic.
+
+March 18, 2026 incident (Q1 end-of-quarter pipeline crunch)
+------------------------------------------------------------
+  Mar 16–17: Pre-incident surge, prod slot utilisation climbs to 97%
+  Mar 18:    2 of 4 prod nodes fail under load (cc_status → alert)
+  Mar 19:    1 node restored (partial recovery)
+  Mar 20+:   Full recovery
+
+Incident is VISIBLE in node-level trend charts as a ~33% drop in total
+CPU cores and total memory on Mar 18, partial recovery on Mar 19.
 """
 
 import random
@@ -56,15 +71,40 @@ INSERT INTO {catalog}.source_to_stage.raw_snaplogic_activities
 VALUES
 {values};"""
 
-# (instance_id, label, environment, location, max_slots, max_mem_mb,
-#  node_count, uptime_pct, cpu_cores_per_node, total_mem_gb_per_node)
+# Snaplex hardware config: (instance_id, label, env, location, max_slots, max_mem_mb,
+#                            node_count, cpu_cores_per_node, base_mem_gb_per_node)
 _SNAPLEXES = [
     ("demo-instance-prod-001", "Demo Production Snaplex",
-     "production",  "us-east-1",  40, 8192, 4, 0.95, 16, 64.0),
+     "production",  "us-east-1",  40, 8192, 4, 16, 64.0),
     ("demo-instance-dev-001",  "Demo Development Snaplex",
-     "development", "us-west-2",   8, 4096, 2, 0.85,  8, 32.0),
+     "development", "us-west-2",   8, 4096, 2,  8, 32.0),
     ("demo-instance-stg-001",  "Demo Staging Snaplex",
-     "staging",     "eu-west-1",  16, 4096, 2, 0.88,  8, 32.0),
+     "staging",     "eu-west-1",  16, 4096, 2,  8, 32.0),
+]
+
+# State-change event log for raw_snaplogic_snaplex.
+# Each tuple:
+#   (instance_id, cc_status, running_nodes, down_nodes,
+#    reserved_frac,  # fraction of max_slots reserved during this period
+#    t_start_str, t_end_str)
+#
+# These ~9 rows are the entire snaplex table content — NOT a daily series.
+# The weighted average drives the flat-line Snaplex-level charts:
+#   slot_utilization ≈ 69%   capacity_headroom ≈ 31%
+#   node_availability ≈ 64%
+_SNAPLEX_STATE_PERIODS = [
+    # Prod: normal → incident → recovery
+    ("demo-instance-prod-001", "up_and_running", 4, 0, 0.80, "2025-03-25", "2026-03-17"),
+    ("demo-instance-prod-001", "alert",          2, 2, 0.97, "2026-03-18", "2026-03-19"),
+    ("demo-instance-prod-001", "up_and_running", 4, 0, 0.68, "2026-03-20", "2026-04-01"),
+    # Dev: normal → brief outage Mar 1-3 → recovery
+    ("demo-instance-dev-001",  "up_and_running", 2, 0, 0.52, "2025-03-25", "2026-02-28"),
+    ("demo-instance-dev-001",  "not_running",    0, 2, 0.00, "2026-03-01", "2026-03-03"),
+    ("demo-instance-dev-001",  "up_and_running", 2, 0, 0.62, "2026-03-04", "2026-04-01"),
+    # Staging: normal → brief alert Feb 16-17 → recovery
+    ("demo-instance-stg-001",  "up_and_running", 2, 0, 0.44, "2025-03-25", "2026-02-15"),
+    ("demo-instance-stg-001",  "alert",          1, 1, 0.50, "2026-02-16", "2026-02-17"),
+    ("demo-instance-stg-001",  "up_and_running", 2, 0, 0.62, "2026-02-18", "2026-04-01"),
 ]
 
 _USERS    = ["demo-alice@acme.com", "demo-bob@acme.com", "demo-carol@acme.com"]
@@ -74,12 +114,8 @@ _ASSETS   = [
     "demo-user-events", "demo-revenue-report", "demo-metric-aggregator",
     "demo-data-quality", "demo-compliance-check",
 ]
-# (event_type, cumulative_weight)
 _EVENT_CDF = [("asset_create", 0.30), ("asset_update", 0.85), ("asset_delete", 1.00)]
 
-# Additional users whose first activity is staggered across the story period.
-# Each tuple: (email, days_offset_from_story_start)
-# Spread ~18 users across ~370 days so every monthly/weekly bucket gets new users.
 _ONBOARDING_USERS = [
     ("demo-snaplogic-user-01@acme.com",  20),
     ("demo-snaplogic-user-02@acme.com",  45),
@@ -115,180 +151,118 @@ def _chunks(lst, n):
 
 
 def _ts(dt: datetime) -> str:
-    """Format a datetime as a quoted SQL string Spark auto-casts to TIMESTAMP."""
     return f"'{dt.strftime('%Y-%m-%d %H:%M:%S')}'"
 
 
-def _build_daily_state(story: dict):
+def _build_node_daily_state(story: dict) -> dict:
     """
-    Pre-compute per-day, per-Snaplex state so snaplex and node tables are
-    consistent (running_nodes_count matches actual node statuses).
+    Return per-day, per-node running/down status for each Snaplex.
+    Used only by generate_nodes — not by generate_snaplex.
 
-    Utilization uses a momentum-based "drifting base" so consecutive days are
-    correlated (no more independent white noise). Weekly and monthly rhythms
-    are layered on top, plus a hard-coded Q1-end capacity incident on 2026-03-18.
+    Incident hard-coded at 2026-03-18:
+      Mar 18: prod nodes 3 and 4 go down
+      Mar 19: prod node 3 restored, node 4 still down
+      Mar 20+: full recovery
+    Other downtime is rare random noise (~2% chance per node per day).
 
-    Incident — 2026-03-18 (Q1 end-of-quarter pipeline crunch):
-      Mar 16-17: Pre-incident surge, prod utilization climbs to 90-95%
-      Mar 18:    2 of 4 prod nodes fail under load → cc_status='alert',
-                 node_availability ~50%, headroom collapses
-      Mar 19:    Partial recovery (1 node restored)
-      Mar 20+:   Full recovery, utilization normalises
-
-    Returns a dict keyed by (date, instance_id):
-      { "cc_status", "running", "down", "reserved", "util", "node_statuses" }
+    Returns dict keyed by (date, instance_id) →
+      { "node_statuses": ["running"|"down", ...] }
     """
-    state = {}
-    rng = random.Random(43)
+    rng    = random.Random(43)
+    result = {}
+    INCIDENT = date(2026, 3, 18)
+
+    for d in date_range(story["start_date"], story["end_date"]):
+        incident_delta = (d - INCIDENT).days
+
+        for (inst_id, _label, _env, _loc, _slots, _mem,
+             node_count, _cpu, _mem_gb) in _SNAPLEXES:
+
+            is_prod = "prod" in inst_id
+            statuses = []
+
+            for ni in range(node_count):
+                if is_prod and incident_delta == 0:
+                    # Mar 18: nodes 3 and 4 down
+                    statuses.append("down" if ni >= 2 else "running")
+                elif is_prod and incident_delta == 1:
+                    # Mar 19: node 4 still down
+                    statuses.append("down" if ni == 3 else "running")
+                else:
+                    # Normal: ~2% random downtime per node
+                    statuses.append("down" if rng.random() < 0.02 else "running")
+
+            result[(d, inst_id)] = {"node_statuses": statuses}
+
+    return result
+
+
+def generate_snaplex(catalog: str, entities: dict, story: dict) -> list[str]:
+    """
+    Outputs the 9 state-change event records from _SNAPLEX_STATE_PERIODS.
+    One INSERT statement for all 9 rows.
+    """
+    # Build a lookup: instance_id → hardware config
+    hw = {sx[0]: sx for sx in _SNAPLEXES}
+
+    rows = []
+    for (inst_id, cc_status, running, down, reserved_frac,
+         t_start_str, t_end_str) in _SNAPLEX_STATE_PERIODS:
+
+        _, label, env, loc, max_slots, max_mem, _nc, _cpu, _mem = hw[inst_id]
+        reserved  = int(max_slots * reserved_frac)
+        t_start   = datetime.fromisoformat(t_start_str + " 00:00:00")
+        t_end     = datetime.fromisoformat(t_end_str   + " 23:59:59")
+
+        rows.append(
+            f"  ({_sql_val(inst_id)}, {_sql_val(label)}, "
+            f"{_sql_val(env)}, {_sql_val(loc)}, {_sql_val(_ORG)}, "
+            f"{_sql_val(cc_status)}, {running}, {down}, "
+            f"{max_slots}, {max_mem}, {reserved}, "
+            f"{_ts(t_start)}, {_ts(t_end)})"
+        )
+
+    return [_INSERT_SNAPLEX.format(catalog=catalog, values=",\n".join(rows))]
+
+
+def generate_nodes(catalog: str, entities: dict, story: dict) -> list[str]:
+    """
+    One snapshot per RUNNING node per day (down nodes don't report).
+    Skipping down nodes is what makes CPU/memory trend charts dip during
+    incidents — the node-level aggregate charts (total memory, cpu_core_count,
+    JVM allocation, swap) go directly to this table without joining snaplex.
+
+    JVM memory grows from ~22% to ~48% of total over the story period to
+    simulate a platform under increasing load.
+    """
+    node_state = _build_node_daily_state(story)
+    rng        = random.Random(44)
+    rows       = []
 
     story_start = date.fromisoformat(story["start_date"])
     story_end   = date.fromisoformat(story["end_date"])
     total_days  = max((story_end - story_start).days, 1)
 
-    INCIDENT_DATE = date(2026, 3, 18)
-
-    # Per-Snaplex drifting utilization base, seeded to the story start
-    # Each day the base drifts ±drift_speed, clamped to [floor, ceiling].
-    drift_base = {sx[0]: lerp(0.42, 0.55, 0) for sx in _SNAPLEXES}
-
     for d in date_range(story["start_date"], story["end_date"]):
-        t          = (d - story_start).days / total_days
-        is_weekend = d.weekday() >= 5
-        dow        = d.weekday()          # 0=Mon … 6=Sun
-        is_eom     = d.day >= 27          # end-of-month reporting push
+        t = (d - story_start).days / total_days
 
-        # Incident window relative to INCIDENT_DATE
-        incident_delta = (d - INCIDENT_DATE).days   # negative = before, 0 = day-of
+        for (inst_id, label, env, loc, _slots, _mem,
+             node_count, cpu_cores, base_mem_gb) in _SNAPLEXES:
 
-        for (inst_id, _label, _env, _loc, max_slots, _mem,
-             node_count, uptime_pct, _cpu, _mem_gb) in _SNAPLEXES:
-
-            is_prod = "prod" in inst_id
-
-            # ── Drift the per-Snaplex utilization base ───────────────────────
-            # Target: slow upward trend over the year, faster drift on weekdays
-            trend_target = lerp(0.45, 0.78, t)
-            pull         = (trend_target - drift_base[inst_id]) * 0.08   # gentle pull toward trend
-            drift        = rng.uniform(-0.04, 0.04) + pull
-            drift_base[inst_id] = max(0.10, min(0.95, drift_base[inst_id] + drift))
-
-            # ── Day-of-week rhythm ───────────────────────────────────────────
-            # Mon=1.05, Tue/Wed/Thu=1.10, Fri=0.90, Sat=0.35, Sun=0.25
-            dow_mult = [1.05, 1.10, 1.10, 1.10, 0.90, 0.35, 0.25][dow]
-
-            # ── End-of-month burst ───────────────────────────────────────────
-            eom_mult = 1.12 if (is_eom and not is_weekend) else 1.0
-
-            # ── Incident override (prod only) ────────────────────────────────
-            if is_prod:
-                if incident_delta == -2:    # Mar 16: pre-surge begins
-                    eom_mult *= 1.25
-                elif incident_delta == -1:  # Mar 17: surge peak
-                    eom_mult *= 1.40
-                elif incident_delta == 0:   # Mar 18: incident day
-                    eom_mult *= 1.45
-                elif incident_delta == 1:   # Mar 19: partial recovery
-                    eom_mult *= 0.85
-                # Mar 20+ normalises naturally via drift
-
-            # ── Final utilization ────────────────────────────────────────────
-            raw_util = drift_base[inst_id] * dow_mult * eom_mult
-            util     = max(0.05, min(0.98, raw_util))
-
-            # ── Incident: force prod Snaplex to alert on Mar 18-19 ───────────
-            if is_prod and incident_delta in (0, 1):
-                cc_status = "alert"
-            else:
-                r = rng.random()
-                if r < uptime_pct:
-                    cc_status = "up_and_running"
-                elif r < uptime_pct + 0.06:
-                    cc_status = "alert"
-                else:
-                    cc_status = "not_running"
-
-            # ── Node statuses ────────────────────────────────────────────────
-            node_statuses = []
-            for ni in range(node_count):
-                if is_prod and incident_delta == 0:
-                    # Mar 18: nodes 3 and 4 go down
-                    node_statuses.append("down" if ni >= 2 else "running")
-                elif is_prod and incident_delta == 1:
-                    # Mar 19: node 3 restored, node 4 still down
-                    node_statuses.append("down" if ni == 3 else "running")
-                elif cc_status == "up_and_running":
-                    node_statuses.append("running" if rng.random() > 0.02 else "down")
-                elif cc_status == "alert":
-                    node_statuses.append("running" if rng.random() > 0.40 else "down")
-                else:
-                    node_statuses.append("down")
-
-            running  = node_statuses.count("running")
-            down     = node_statuses.count("down")
-            reserved = int(max_slots * util) if cc_status != "not_running" else 0
-
-            state[(d, inst_id)] = {
-                "cc_status":     cc_status,
-                "running":       running,
-                "down":          down,
-                "reserved":      reserved,
-                "util":          reserved / max_slots if max_slots else 0,
-                "node_statuses": node_statuses,
-            }
-
-    return state
-
-
-def generate_snaplex(catalog: str, entities: dict, story: dict) -> list[str]:
-    state = _build_daily_state(story)
-    rows = []
-
-    for d in date_range(story["start_date"], story["end_date"]):
-        for (inst_id, label, env, loc, max_slots, max_mem,
-             node_count, _uptime, _cpu, _mem_gb) in _SNAPLEXES:
-
-            s = state[(d, inst_id)]
-            t_start = datetime(d.year, d.month, d.day, 0, 0, 0)
-            t_end   = t_start + timedelta(hours=23, minutes=59, seconds=59)
-
-            rows.append(
-                f"  ({_sql_val(inst_id)}, {_sql_val(label)}, "
-                f"{_sql_val(env)}, {_sql_val(loc)}, {_sql_val(_ORG)}, "
-                f"{_sql_val(s['cc_status'])}, {s['running']}, {s['down']}, "
-                f"{max_slots}, {max_mem}, {s['reserved']}, "
-                f"{_ts(t_start)}, {_ts(t_end)})"
-            )
-
-    return [
-        _INSERT_SNAPLEX.format(catalog=catalog, values=",\n".join(chunk))
-        for chunk in _chunks(rows, 200)
-    ]
-
-
-def generate_nodes(catalog: str, entities: dict, story: dict) -> list[str]:
-    state = _build_daily_state(story)
-    rng   = random.Random(44)
-    rows  = []
-
-    for d in date_range(story["start_date"], story["end_date"]):
-        for (inst_id, label, env, loc, _max_slots, _max_mem,
-             node_count, _uptime, cpu_cores, base_mem_gb) in _SNAPLEXES:
-
-            s = state[(d, inst_id)]
+            statuses = node_state[(d, inst_id)]["node_statuses"]
 
             for n in range(node_count):
-                node_id    = f"{inst_id}-node-{n + 1:02d}"
-                node_label = f"{label} Node {n + 1}"
-                node_status = s["node_statuses"][n]
+                if statuses[n] == "down":
+                    continue  # down nodes don't send telemetry
 
-                # Memory: hardware total is stable (±3%); JVM heap scales
-                # with the day's slot utilization so it rises and falls with load.
-                util       = s["util"]
-                total_mem  = round(base_mem_gb * rng.uniform(0.97, 1.03), 2)
-                jvm_pct    = lerp(0.20, 0.45, util) + rng.uniform(-0.03, 0.03)
-                jvm_mem    = round(total_mem * max(0.10, min(0.55, jvm_pct)), 2)
-                swap_bytes = rng.choice([8_589_934_592, 17_179_869_184])  # 8 GB or 16 GB
-                max_fds    = 65536
+                node_id     = f"{inst_id}-node-{n + 1:02d}"
+                node_label  = f"{label} Node {n + 1}"
+
+                # Hardware total is stable (±3%); JVM heap grows over the year
+                total_mem = round(base_mem_gb * rng.uniform(0.97, 1.03), 2)
+                jvm_pct   = lerp(0.22, 0.48, t) + rng.uniform(-0.03, 0.03)
+                jvm_mem   = round(total_mem * max(0.10, min(0.58, jvm_pct)), 2)
+                swap_bytes = rng.choice([8_589_934_592, 17_179_869_184])
                 create_ts  = datetime(d.year, d.month, d.day,
                                       rng.randint(0, 2), rng.randint(0, 59))
 
@@ -296,9 +270,9 @@ def generate_nodes(catalog: str, entities: dict, story: dict) -> list[str]:
                     f"  ({_sql_val(node_id)}, {_sql_val(node_label)}, "
                     f"{_sql_val(label)}, {_sql_val(inst_id)}, "
                     f"{_sql_val(env)}, {_sql_val(loc)}, {_sql_val(_ORG)}, "
-                    f"{_sql_val(node_status)}, "
+                    f"'running', "
                     f"{cpu_cores}, {total_mem}, {jvm_mem}, "
-                    f"{swap_bytes}, {max_fds}, "
+                    f"{swap_bytes}, 65536, "
                     f"{_ts(create_ts)})"
                 )
 
@@ -315,24 +289,20 @@ def generate_activities(catalog: str, entities: dict, story: dict) -> list[str]:
 
     story_start = date.fromisoformat(story["start_date"])
 
-    # Build a set of (user, first_active_date) for onboarding users
     onboarding = {
         user: story_start + timedelta(days=offset)
         for user, offset in _ONBOARDING_USERS
     }
 
     for d in date_range(story["start_date"], story["end_date"]):
-        # Minimal weekend activity
         if d.weekday() >= 5 and rng.random() > 0.10:
             continue
 
-        # Core users: active throughout
         active_users = list(_USERS)
-        # Onboarding users: active from their first date onwards
         active_users += [u for u, first in onboarding.items() if d >= first]
 
         for user in active_users:
-            if rng.random() > 0.70:  # ~70% chance active on a given day
+            if rng.random() > 0.70:
                 continue
 
             n_events = rng.randint(1, 5)
