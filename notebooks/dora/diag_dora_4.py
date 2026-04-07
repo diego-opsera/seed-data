@@ -38,13 +38,13 @@ out("fgu.distinct_level_1", rows(f"""
 """, 20))
 
 out("fgu.hierarchy_sample", rows(f"""
-    SELECT level_1, level_2, level_3, level_4, labels, id FROM {FGU}
-    ORDER BY level_1, level_2, level_3, level_4, labels
+    SELECT level_1, level_2, level_3, level_4, id FROM {FGU}
+    ORDER BY level_1, level_2, level_3, level_4
 """, 20))
 
 out("fgu.demo_acme_opsera_rows", rows(f"""
     SELECT * FROM {FGU}
-    WHERE lower(concat_ws(' ', level_1, level_2, level_3, level_4, labels))
+    WHERE lower(concat_ws(' ', level_1, level_2, level_3, level_4))
           RLIKE 'demo|acme|opsera'
 """, 20))
 
@@ -67,7 +67,7 @@ out("fgvf.distinct_level_1", rows(f"""
 
 out("fgvf.demo_acme_rows", rows(f"""
     SELECT * FROM {FGVF}
-    WHERE lower(concat_ws(' ', level_1, level_2, level_3, level_4, labels))
+    WHERE lower(concat_ws(' ', level_1, level_2, level_3, level_4))
           RLIKE 'demo|acme'
 """, 10))
 
