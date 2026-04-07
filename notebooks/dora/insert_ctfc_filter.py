@@ -13,9 +13,12 @@ FILTER_GROUP_ID = "d277535f-a8cb-4429-965d-a9de685b4045"
 
 # ── 0. Insert jira_boards row for board_id=1 (required for CTFC chart join) ──
 spark.sql(f"""
-    INSERT INTO {CATALOG}.base_datasets.jira_boards
-        (board_id, board_name, board_type, project_name)
-    VALUES (1, 'ACME Board', 'scrum', null)
+    INSERT INTO {CATALOG}.source_to_stage.raw_jira_boards_ci
+        (message, board_id, board_name, board_type, org_name)
+    VALUES (
+        '{{"id": 1, "name": "ACME Board", "type": "scrum"}}',
+        1, 'ACME Board', 'scrum', 'demo-acme-direct'
+    )
 """)
 print("jira_boards: inserted board_id=1 (ACME Board)")
 

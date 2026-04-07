@@ -15,6 +15,6 @@ def _del(table, col, val):
 results = [
     _del(f"{CATALOG}.master_data.filter_groups_unity",  "createdBy",   "seed-data@demo.io"),
     _del(f"{CATALOG}.master_data.filter_values_unity",  "created_by",  "seed-data@demo.io"),
-    _del(f"{CATALOG}.base_datasets.jira_boards",        "board_id",    "1"),
+    _del(f"{CATALOG}.source_to_stage.raw_jira_boards_ci", "board_id",   "1"),
 ]
 print(json.dumps(results, indent=2))
