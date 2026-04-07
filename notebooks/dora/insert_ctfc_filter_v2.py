@@ -1,6 +1,5 @@
-# Patch v2: replace wrong CTFC filter rows (0cb8981e = jira_velocity, not CTFC)
-# with correct rows using all actual ctfc_custom_* KPI UUIDs from kpiIdentifierConfig.json.
-# Run ONCE in environments where insert_ctfc_filter.py already ran with the wrong UUID.
+# Insert CTFC Jira filter rows for demo-acme-corp using correct ctfc_custom_* KPI UUIDs.
+# Safe to run as part of the post-data-wipe process.
 # Run via exec(open("/tmp/seed-data/notebooks/dora/insert_ctfc_filter_v2.py").read())
 
 import uuid as _uuid, json
@@ -8,10 +7,7 @@ import uuid as _uuid, json
 CATALOG = "playground_prod"
 FILTER_GROUP_ID = "d277535f-a8cb-4429-965d-a9de685b4045"  # demo-acme-corp
 
-# Wrong UUID we used before (0cb8981e = jira_velocity_table_data, not CTFC)
-WRONG_KPI = "0cb8981e-3a17-4a14-b1f3-83bcecf10373"
-
-# All correct CTFC chart UUIDs (from kpiIdentifierConfig.json: ctfc_custom_*)
+# All CTFC chart UUIDs (from kpiIdentifierConfig.json: ctfc_custom_*)
 CTFC_KPIS = [
     "f60d8a58-7c8d-4dd6-9b54-6c07715ae5ec",  # ctfc_custom_overview
     "7f0d028a-06fd-4c1d-8915-3f94c53899e2",  # ctfc_custom_sine_wave
@@ -22,16 +18,6 @@ CTFC_KPIS = [
 ]
 KPIS_SQL = ", ".join(f"'{k}'" for k in CTFC_KPIS)
 
-# ── 1. Delete wrong filter rows ───────────────────────────────────────────────
-spark.sql(f"""
-    DELETE FROM {CATALOG}.master_data.filter_values_unity
-    WHERE filter_group_id = '{FILTER_GROUP_ID}'
-      AND array_contains(kpi_uuids, '{WRONG_KPI}')
-      AND created_by = 'seed-data@demo.io'
-""")
-print(f"Deleted wrong filter rows for {WRONG_KPI}")
-
-# ── 2. Insert correct CTFC filter rows ────────────────────────────────────────
 _ctfc_filters = [
     ("project_name",        ["ACME"],                                           4),
     ("issue_status",        ["Done", "done", "Completed"],                      5),
@@ -57,9 +43,8 @@ for _fname, _fvals, _sort in _ctfc_filters:
             'user', true, {_sort}
         )
     """)
-    print(f"  inserted jira/{_fname} for all CTFC KPIs")
+    print(f"  inserted jira/{_fname}")
 
-# ── 3. Verify view now has the correct row ────────────────────────────────────
 row = spark.sql(f"""
     SELECT level_3, kpi_uuids, project_name, board_ids, issue_status
     FROM {CATALOG}.master_data.v_filter_group_values_kpi_flattened_unity
@@ -68,5 +53,3 @@ row = spark.sql(f"""
     LIMIT 1
 """).collect()
 print(f"\nview row for f60d8a58 present: {len(row) > 0}")
-if row:
-    print(json.dumps(row[0].asDict(), default=str, indent=2))
