@@ -53,5 +53,8 @@ out("pa.real_github_account_sample", rows(f"""
 # ── 6. Check if there's a joining_proj_url computed column or view ─────────────
 # Try to see if the DF chart might use a different view/table
 out("pa.views_in_base_datasets", [r.asDict() for r in sql(f"""
-    SHOW VIEWS IN {CATALOG}.base_datasets
+    SELECT table_name, table_type
+    FROM {CATALOG}.information_schema.tables
+    WHERE table_schema = 'base_datasets'
+      AND table_type = 'VIEW'
 """).collect()])
