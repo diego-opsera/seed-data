@@ -5,7 +5,26 @@
 #   exec(open("/tmp/seed-data/notebooks/insert.py").read())
 # ============================================================
 
+import re
+from datetime import date, timedelta
+
 BASE = "/tmp/seed-data/notebooks"
+
+# Rolling 1-year window ending today — update narrative.yaml before any sub-script runs
+_today = date.today()
+_start = _today - timedelta(days=365)
+_yaml_path = "/tmp/seed-data/config/stories/narrative.yaml"
+
+with open(_yaml_path) as _f:
+    _yaml = _f.read()
+
+_yaml = re.sub(r'^start_date: ".*"', f'start_date: "{_start.isoformat()}"', _yaml, flags=re.MULTILINE)
+_yaml = re.sub(r'^end_date: ".*"',   f'end_date: "{_today.isoformat()}"',   _yaml, flags=re.MULTILINE)
+
+with open(_yaml_path, "w") as _f:
+    _f.write(_yaml)
+
+print(f"Date window: {_start.isoformat()} → {_today.isoformat()}")
 
 def run(path):
     print(f"\n{'='*60}")
