@@ -222,5 +222,8 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
     sqls = []
     for i in range(0, len(value_lines), batch_size):
         batch = value_lines[i:i + batch_size]
-        sqls.append(INSERT_SQL.format(catalog=catalog, values=",\n".join(batch)))
+        sql = INSERT_SQL.format(catalog=catalog, values=",\n".join(batch))
+        sqls.append(sql)
+        # CTFC chart reads from mt_itsm_issues_hist, not _current — mirror every batch
+        sqls.append(sql.replace("mt_itsm_issues_current", "mt_itsm_issues_hist"))
     return sqls

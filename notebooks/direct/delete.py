@@ -43,6 +43,7 @@ consumption_level_name_tables = [
 # ITSM issues scoped by customer_id
 itsm_tables = [
     ("transform_stage", "mt_itsm_issues_current"),
+    ("transform_stage", "mt_itsm_issues_hist"),
 ]
 
 for schema, table in source_to_stage_tables + org_name_tables:
