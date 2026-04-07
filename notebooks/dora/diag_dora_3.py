@@ -68,12 +68,12 @@ spark.sql(f"DESCRIBE {CATALOG}.master_data.kpi_table").show(30, False)
 print("\n=== kpi_table: DORA-related KPIs ===")
 spark.sql(f"""
     SELECT * FROM {CATALOG}.master_data.kpi_table
-    WHERE lower(kpi_name) LIKE '%dora%'
-       OR lower(kpi_name) LIKE '%deploy%'
-       OR lower(kpi_name) LIKE '%lead time%'
-       OR lower(kpi_name) LIKE '%mttr%'
-       OR lower(kpi_name) LIKE '%failure%'
-       OR lower(kpi_name) LIKE '%sdm%'
+    WHERE lower(displayName) LIKE '%dora%'
+       OR lower(displayName) LIKE '%deploy%'
+       OR lower(displayName) LIKE '%lead time%'
+       OR lower(displayName) LIKE '%mttr%'
+       OR lower(displayName) LIKE '%failure%'
+       OR lower(displayName) LIKE '%sdm%'
     LIMIT 20
 """).show(20, False)
 
