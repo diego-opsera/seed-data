@@ -271,14 +271,16 @@ def _cfr_rows(catalog):
                 )
 
         # Incident issues (drives MTTR — mttr_issue_key IS NOT NULL)
-        for j, d in enumerate(_spread(bdays, tot_inc)):
+        # Use random sampling so incidents cluster naturally rather than spacing evenly
+        rng_inc  = random.Random(s + 88)
+        inc_days = sorted(rng_inc.choices(bdays, k=tot_inc)) if tot_inc > 0 else []
+        for j, d in enumerate(inc_days):
             issue += 1
             rng     = random.Random(s * 10000 + j)
             created = datetime(yr, mo, d.day, rng.randint(0, 23), rng.randint(0, 59))
             mttr_h  = max(0.1, avg_mttr * (0.7 + rng.random() * 0.6))
             resolved = created + timedelta(hours=mttr_h)
             key      = f"ACME-INC-{issue:04d}"
-
             rows.append(
                 f"  ({_sq(key)}, {_sq('Bug')}, {_sq('Closed')}, {_sq(_ISSUE_PROJECT)}, "
                 f"{_sq('Fixed')}, {_ts(created)}, {_ts(resolved)}, "
@@ -288,6 +290,29 @@ def _cfr_rows(catalog):
                 f"{_sq(key)}, NULL, NULL, "
                 f"NULL, CURRENT_TIMESTAMP(), {_sq(_RECORD_BY)})"
             )
+
+        # March 18 incident: 3 primary incident tickets — main, cascading, and follow-on
+        # Staggered through the day with decreasing severity/recovery time
+        if (yr, mo) == (2026, 3) and _INC in bdays:
+            for i, (hour, mttr_h, label) in enumerate([
+                ( 8, 18.0, "[SEV1] Production outage — March 18"),
+                (11, 12.0, "[SEV1] Cascading DB failures — March 18"),
+                (15,  6.0, "[SEV2] Auth service degraded — March 18"),
+            ]):
+                issue += 1
+                rng     = random.Random(s * 4000 + i)
+                created = datetime(_INC.year, _INC.month, _INC.day, hour, rng.randint(0, 30))
+                resolved = created + timedelta(hours=mttr_h)
+                key      = f"ACME-INC-{issue:04d}"
+                rows.append(
+                    f"  ({_sq(key)}, {_sq('Bug')}, {_sq('Closed')}, {_sq(_ISSUE_PROJECT)}, "
+                    f"{_sq('Fixed')}, {_ts(created)}, {_ts(resolved)}, "
+                    f"{_sq('jira')}, {_ts(resolved)}, {_sq('Critical')}, "
+                    f"{_sq('Demo User')}, {_sq(f'https://acme.atlassian.net/browse/{key}')}, "
+                    f"{_sq(label)}, "
+                    f"{_sq(key)}, NULL, NULL, "
+                    f"NULL, CURRENT_TIMESTAMP(), {_sq(_RECORD_BY)})"
+                )
     return rows
 
 

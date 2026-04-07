@@ -119,8 +119,8 @@ def _org_monthly(yr, mo):
     # ── Deployment Frequency ──
     total  = jitter(round(lerp(8, 80, t)), 12, s)
     frate  = lerp(0.42, 0.04, t)
-    if (yr, mo) == (2026, 3):          # March incident: failure rate spikes back
-        frate = 0.22
+    if (yr, mo) == (2026, 3):          # March incident: ~6 extra failures lift monthly rate
+        frate = 0.12
     failed  = max(0, round(total * frate))
     success = total - failed
 
@@ -139,6 +139,8 @@ def _org_monthly(yr, mo):
     if (yr, mo) == (2026, 3):
         avg_mttr = 18.0
     tot_inc = jitter(round(lerp(8, 1, t)), 20, s + 4)
+    if (yr, mo) == (2026, 3):
+        tot_inc = max(tot_inc, 4)    # main incident + cascading issues inflate March count
     res_inc = max(0, tot_inc - (0 if random.Random(s + 5).random() < 0.85 else 1))
 
     # ── Cycle Time for Changes (days from issue creation to deploy) ──
@@ -174,9 +176,11 @@ def _org_weekly(d):
     inc_week = (d <= _INC <= d + timedelta(days=6))
 
     total  = max(0, jitter(round(lerp(8, 80, t) / 4.33), 15, s))
+    if inc_week:
+        total = max(total, round(lerp(8, 80, t) / 4.33 * 2))  # 2x emergency deploys that week
     frate  = lerp(0.42, 0.04, t)
     if inc_week:
-        frate = 0.35
+        frate = 0.55    # most emergency hotfixes fail before the fix lands
     failed  = max(0, round(total * frate))
     success = total - failed
 
@@ -188,10 +192,10 @@ def _org_weekly(d):
 
     avg_mttr = round(max(0.3, lerp(200.0, 0.5, t) + random.Random(s + 3).gauss(0, 3)), 2)
     if inc_week:
-        avg_mttr = 24.0
+        avg_mttr = 48.0     # serious incident — nearly 2 days to fully resolve
     tot_inc = 1 if (random.Random(s + 4).random() < lerp(0.50, 0.05, t)) else 0
     if inc_week:
-        tot_inc = max(tot_inc, 1)
+        tot_inc = max(tot_inc, 3)   # main incident + 2 cascading issues
     res_inc = tot_inc
 
     ctfc_v = round(max(0.5, lerp(22.0, 3.5, t) + random.Random(s + 6).gauss(0, 0.4)), 2)
@@ -230,10 +234,10 @@ def _org_daily(d):
     base_daily = lerp(8, 80, t) / 22
     total = jitter(round(base_daily), 20, s) if wday else 0
     if is_inc:
-        total = max(total, round(base_daily * 2))   # incident response activity
+        total = max(total, round(base_daily * 3))   # 3x emergency hotfix attempts
     frate  = lerp(0.42, 0.04, t)
     if is_inc:
-        frate = 0.60
+        frate = 0.70    # most attempts fail before the fix lands
     failed  = max(0, round(total * frate)) if total else 0
     success = total - failed
 
@@ -248,6 +252,8 @@ def _org_daily(d):
     inc_prob = lerp(8, 1, t) / 22
     has_inc  = (random.Random(s + 4).random() < inc_prob and wday) or is_inc
     tot_inc  = 1 if has_inc else 0
+    if is_inc:
+        tot_inc = 3     # main incident + 2 cascading issues all fire on March 18
     res_inc  = tot_inc
     mttr_today = round(lerp(200.0, 0.5, t), 1) if has_inc else 0
     if is_inc:
