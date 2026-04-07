@@ -165,5 +165,5 @@ print(json.dumps({
     "github_url": "https://github.com/demo-acme/project_001.git",
     "jira_project_cfr_mttr": "Acme Platform",
     "jira_project_ctfc": "ACME",
-    "kpis": {"df": DF_KPI, "ltfc": LTFC_KPI, "cfr": CFR_KPI, "mttr": MTTR_KPI, "ctfc": CTFC_KPI}
+    "kpis": {"df": DF_KPI, "ltfc": LTFC_KPI, "cfr": CFR_KPI, "mttr": MTTR_KPI, "ctfc": CTFC_KPIS[0]}
 }))
