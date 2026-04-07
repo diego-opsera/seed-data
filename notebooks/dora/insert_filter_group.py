@@ -110,7 +110,15 @@ spark.sql(f"""
 """)
 print(f"filter_values_unity (github/pipeline_status_success): id={FVU_STATUS_ID}")
 
-# ── 6. filter_values_unity — CTFC Jira filters (Cycle Time for Changes) ────────
+# ── 6. jira_boards — board entry required by CTFC chart join ─────────────────
+spark.sql(f"""
+    INSERT INTO {CATALOG}.base_datasets.jira_boards
+        (board_id, board_name, board_type, project_name)
+    VALUES (1, 'ACME Board', 'scrum', null)
+""")
+print("jira_boards: inserted board_id=1 (ACME Board)")
+
+# ── 7. filter_values_unity — CTFC Jira filters (Cycle Time for Changes) ────────
 # CTFC reads from v_itsm_issues_current (Jira issues), not pipeline data.
 # Filters: project_name, issue_status, include_issue_types, board_ids, defect_type.
 _ctfc_filters = [

@@ -11,6 +11,14 @@ CTFC_KPI = "0cb8981e-3a17-4a14-b1f3-83bcecf10373"
 # Hardcoded filter_group_id created by insert_filter_group.py for demo-acme-corp
 FILTER_GROUP_ID = "d277535f-a8cb-4429-965d-a9de685b4045"
 
+# ── 0. Insert jira_boards row for board_id=1 (required for CTFC chart join) ──
+spark.sql(f"""
+    INSERT INTO {CATALOG}.base_datasets.jira_boards
+        (board_id, board_name, board_type, project_name)
+    VALUES (1, 'ACME Board', 'scrum', null)
+""")
+print("jira_boards: inserted board_id=1 (ACME Board)")
+
 # ── 1. Insert 5 Jira CTFC filter rows ────────────────────────────────────────
 _ctfc_filters = [
     ("project_name",        ["ACME"],                                           4),
