@@ -35,7 +35,6 @@ out("pa.our_nullability_check", rows(f"""
     SELECT
         COUNT(*) AS total,
         COUNT(account_name) AS has_account_name,
-        COUNT(org_name) AS has_org_name,
         COUNT(pipeline_source) AS has_pipeline_source,
         COUNT(project_url) AS has_project_url
     FROM {CATALOG}.base_datasets.pipeline_activities
@@ -44,7 +43,7 @@ out("pa.our_nullability_check", rows(f"""
 
 # ── 5. Look at what real github rows have for account_name / org_name ─────────
 out("pa.real_github_account_sample", rows(f"""
-    SELECT account_name, org_name, pipeline_source, project_url, step_type
+    SELECT account_name, pipeline_source, project_url, step_type
     FROM {CATALOG}.base_datasets.pipeline_activities
     WHERE pipeline_source = 'github'
       AND record_inserted_by != 'seed-data'
