@@ -2,32 +2,40 @@
 generators/dora_charts.py
 
 Generates INSERT statements for the DORA individual metric chart tables:
-  base_datasets.pipeline_activities   — DF chart (GitHub deployment events)
-  base_datasets.cfr_mttr_metric_data  — CFR and MTTR charts (Jira issue data)
+  base_datasets.pipeline_activities        — DF chart (GitHub deployment events)
+  base_datasets.cfr_mttr_metric_data       — CFR and MTTR charts (Jira issue data)
+  base_datasets.pipeline_deployment_commits — CTFC chart (commit-to-deploy cycle time)
 
 Arc mirrors generators/dora.py (Apr 2025 → Mar 2026) so chart values are
 consistent with the SDM maturity badge scores in consumption_layer.sdm.
 
 Scoped for safe deletion by:
-  pipeline_activities:   record_inserted_by = 'seed-data'
-  cfr_mttr_metric_data:  record_inserted_by = 'seed-data'
+  pipeline_activities:            record_inserted_by = 'seed-data'
+  cfr_mttr_metric_data:           record_inserted_by = 'seed-data'
+  pipeline_deployment_commits:    record_inserted_by = 'seed-data'
 
 Requires filter_values_unity entries (inserted via insert_filter_group.py):
-  filter_name='project_url',  filter_values=['https://github.com/demo-acme/project_001.git']
-  filter_name='project_name', filter_values=['Acme Platform']
+  filter_name='project_url',       filter_values=['https://github.com/demo-acme/project_001.git']
+  filter_name='deployment_stages', filter_values=['deploy']
+  filter_name='pipeline_status_success', filter_values=['success']
+  filter_name='project_name',      filter_values=['Acme Platform']
+  filter_name='project_url' (CTFC KPI), filter_values=['https://github.com/demo-acme/project_001.git']
 """
 
+import hashlib
 import random
 from datetime import date, datetime, timedelta
 
 from .utils import lerp, jitter
 
-TABLES = "pipeline_activities + cfr_mttr_metric_data"
+TABLES = "pipeline_activities + cfr_mttr_metric_data + pipeline_deployment_commits"
 
 _PROJECT_URL   = "https://github.com/demo-acme/project_001.git"
 _ISSUE_PROJECT = "Acme Platform"
 _RECORD_BY     = "seed-data"
 _PIPELINE_ID   = "a1b2c3d4-0000-0000-0000-demoaacme0001"  # stable across runs
+_REPO_ID       = "demo-acme-001"
+_OWNER         = "demo-acme"
 
 _MONTHS = [
     (2025,  4), (2025,  5), (2025,  6),
@@ -63,6 +71,10 @@ def _spread(pool, n):
         return []
     step = len(pool) / n
     return [pool[int(i * step)] for i in range(n)]
+
+
+def _make_sha(seed_str):
+    return hashlib.sha1(seed_str.encode()).hexdigest()
 
 
 # ── SQL helpers ────────────────────────────────────────────────────────────────
@@ -101,6 +113,8 @@ def _pa_rows(catalog):
             finished = started + timedelta(minutes=rng.randint(5, 30))
             status   = "failed" if i < failed else "success"
             conc     = "Failed" if i < failed else "Succeeded"
+            # Successful deployments get a commit SHA so CTFC chart can join
+            commit_sha = _sq(_make_sha(f'acme-deploy-{run}')) if status == "success" else "NULL"
 
             rows.append(
                 f"  ({_sq('github')}, {_sq('github-workflow')}, {_sq(_PROJECT_URL)}, "
@@ -111,9 +125,65 @@ def _pa_rows(catalog):
                 f"{_sq(f'step-{run:05d}')}, {_sq('deploy')}, {_sq('deploy')}, {_sq(status)}, {_sq(conc)}, "
                 f"{_ts(started)}, {_ts(finished)}, "
                 f"{_td(started)}, {_td(finished)}, "
-                f"{_sq('main')}, {_sq('rest_api')}, {_sq(_RECORD_BY)}, "
+                f"{_sq('main')}, {_sq('rest_api')}, {commit_sha}, {_sq(_RECORD_BY)}, "
                 f"CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())"
             )
+    return rows
+
+
+# ── pipeline_deployment_commits rows (CTFC chart) ─────────────────────────────
+
+def _pdc_rows(catalog):
+    rows     = []
+    run      = 0
+    prev_sha = _make_sha('acme-init')  # root "from" SHA
+
+    for yr, mo in _MONTHS:
+        t      = _mt(yr, mo)
+        s      = yr * 100 + mo
+        total  = jitter(round(lerp(8, 80, t)), 12, s)
+        frate  = lerp(0.42, 0.04, t)
+        if (yr, mo) == (2026, 3):
+            frate = 0.22
+        failed = max(0, round(total * frate))
+
+        # CTFC target in days — mirrors dora.py lerp(22.0, 3.5, t)
+        ctfc_days = max(0.5, lerp(22.0, 3.5, t))
+        if (yr, mo) == (2026, 3):
+            ctfc_days = 5.0  # slight regression during incident month
+
+        for i, d in enumerate(_spread(_business_days(yr, mo), total)):
+            run += 1
+            is_success = (i >= failed)
+            if not is_success:
+                continue
+
+            rng      = random.Random(s * 1000 + i)
+            started  = datetime(yr, mo, d.day, rng.randint(9, 17), rng.randint(0, 59))
+            to_sha   = _make_sha(f'acme-deploy-{run}')
+
+            # 1-3 commits per deployment
+            n_commits = rng.randint(1, 3)
+            for j in range(n_commits):
+                commit_sha    = _make_sha(f'acme-commit-{run}-{j}')
+                jitter_factor = 0.7 + rng.random() * 0.6  # ±30% jitter
+                ctfc_h        = max(1.0, ctfc_days * 24 * jitter_factor)
+                committed_dt  = started - timedelta(hours=ctfc_h)
+                web_url = f"https://github.com/demo-acme/project_001/commit/{commit_sha}"
+
+                rows.append(
+                    f"  ({_sq('github')}, {_sq(prev_sha)}, {_sq(to_sha)}, "
+                    f"{_sq(_REPO_ID)}, {_ts(committed_dt)}, "
+                    f"{_sq('dev@demo-acme.io')}, {_sq('Demo Developer')}, "
+                    f"{_ts(committed_dt)}, {_sq(commit_sha)}, "
+                    f"{_sq('feat: update deployment')}, {_sq('feat: update deployment')}, "
+                    f"{_sq(web_url)}, "
+                    f"array(), array('src/app.py'), array(), "
+                    f"{_sq('Demo Developer')}, {_sq(commit_sha)}, "
+                    f"{_sq(_OWNER)}, {_sq(_RECORD_BY)}, CURRENT_TIMESTAMP())"
+                )
+
+            prev_sha = to_sha
     return rows
 
 
@@ -143,7 +213,6 @@ def _cfr_rows(catalog):
             issue += 1
             rng     = random.Random(s * 1000 + i)
             created = datetime(yr, mo, d.day, rng.randint(9, 17), rng.randint(0, 59))
-            # Resolution 2 hours after creation (not an incident, just a Jira ticket closed)
             resolved = created + timedelta(hours=2)
             key      = f"ACME-{issue:04d}"
             fail_key = _sq(key) if i < failed else "NULL"
@@ -154,7 +223,7 @@ def _cfr_rows(catalog):
                 f"{_sq('jira')}, {_ts(resolved)}, {_sq('Medium')}, "
                 f"{_sq('Demo User')}, {_sq(f'https://acme.atlassian.net/browse/{key}')}, "
                 f"{_sq(f'Deploy {yr}-{mo:02d} #{i+1}')}, "
-                f"NULL, {fail_key}, {_sq(key)}, "  # mttr_key=NULL, fail_key, changes_key
+                f"NULL, {fail_key}, {_sq(key)}, "
                 f"NULL, CURRENT_TIMESTAMP(), {_sq(_RECORD_BY)})"
             )
 
@@ -163,7 +232,6 @@ def _cfr_rows(catalog):
             issue += 1
             rng     = random.Random(s * 10000 + j)
             created = datetime(yr, mo, d.day, rng.randint(0, 23), rng.randint(0, 59))
-            # Jitter resolution time around avg_mttr (±30%)
             mttr_h  = max(0.1, avg_mttr * (0.7 + rng.random() * 0.6))
             resolved = created + timedelta(hours=mttr_h)
             key      = f"ACME-INC-{issue:04d}"
@@ -174,7 +242,7 @@ def _cfr_rows(catalog):
                 f"{_sq('jira')}, {_ts(resolved)}, {_sq('High')}, "
                 f"{_sq('Demo User')}, {_sq(f'https://acme.atlassian.net/browse/{key}')}, "
                 f"{_sq(f'Incident {yr}-{mo:02d} #{j+1}')}, "
-                f"{_sq(key)}, NULL, NULL, "  # mttr_key=key, no CFR tracking
+                f"{_sq(key)}, NULL, NULL, "
                 f"NULL, CURRENT_TIMESTAMP(), {_sq(_RECORD_BY)})"
             )
     return rows
@@ -191,8 +259,19 @@ INSERT INTO {catalog}.base_datasets.pipeline_activities
    step_id, step_type, step_name, step_status, step_conclusion,
    step_started_at, step_finished_at,
    step_started_date, step_finished_date,
-   branch, data_source, record_inserted_by,
+   branch, data_source, pipeline_commit_sha, record_inserted_by,
    record_insert_date, source_record_insert_date)
+VALUES
+{values}"""
+
+_PDC_HDR = """\
+INSERT INTO {catalog}.base_datasets.pipeline_deployment_commits
+  (pipeline_source, `from`, `to`, repository_id,
+   committed_date, committer_email, committer_name, created_at,
+   id, message, title, web_url,
+   files_added, files_modified, files_removed,
+   commit_author, commit_id, owner,
+   record_inserted_by, record_inserted_datetime)
 VALUES
 {values}"""
 
@@ -214,6 +293,10 @@ def generate(catalog, entities, story):
     pa = _pa_rows(catalog)
     for i in range(0, len(pa), 400):
         stmts.append(_PA_HDR.format(catalog=catalog, values=",\n".join(pa[i:i+400])))
+
+    pdc = _pdc_rows(catalog)
+    for i in range(0, len(pdc), 400):
+        stmts.append(_PDC_HDR.format(catalog=catalog, values=",\n".join(pdc[i:i+400])))
 
     cfr = _cfr_rows(catalog)
     for i in range(0, len(cfr), 400):

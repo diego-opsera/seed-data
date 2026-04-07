@@ -32,6 +32,20 @@ try:
 except Exception as e:
     print(f"pipeline_activities: ERROR — {e}")
 
+# ── pipeline_deployment_commits ───────────────────────────────────────────────
+try:
+    spark.sql(f"""
+        DELETE FROM {CATALOG}.base_datasets.pipeline_deployment_commits
+        WHERE record_inserted_by = 'seed-data'
+    """)
+    n = spark.sql(f"""
+        SELECT COUNT(*) FROM {CATALOG}.base_datasets.pipeline_deployment_commits
+        WHERE record_inserted_by = 'seed-data'
+    """).collect()[0][0]
+    print(f"pipeline_deployment_commits: deleted  ({n} remaining — should be 0)")
+except Exception as e:
+    print(f"pipeline_deployment_commits: ERROR — {e}")
+
 # ── cfr_mttr_metric_data ──────────────────────────────────────────────────────
 try:
     spark.sql(f"""
