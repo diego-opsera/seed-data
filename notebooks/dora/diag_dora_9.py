@@ -13,7 +13,7 @@ def out(label, data): print(f"\n### {label}"); print(json.dumps(data, default=st
 
 # ── 1. Real filter_values_unity rows for DF KPI (not ours) ────────────────────
 out("fvu.real_df_kpi_rows", rows(f"""
-    SELECT filter_group_id, tool_type, filter_name, filter_values, active
+    SELECT filter_group_id, tool_type, filter_values, active
     FROM {CATALOG}.master_data.filter_values_unity
     WHERE array_contains(kpi_uuids, '{DF_KPI}')
       AND filter_group_id != '{OUR_FGID}'
@@ -43,7 +43,7 @@ if real_df_fgids:
 
         # What does the view return for this level_3?
         out("view.real_df_row", rows(f"""
-            SELECT level_3, filter_group_id, kpi_uuids, tool_type, filter_name, filter_values
+            SELECT level_3, filter_group_id, kpi_uuids, tool_type, project_url, pipeline_id
             FROM {CATALOG}.master_data.v_filter_group_values_kpi_flattened_unity
             WHERE level_3 = '{lvl3}' AND kpi_uuids = '{DF_KPI}'
         """, 3))
@@ -63,12 +63,20 @@ if real_df_fgids:
             WHERE pa.pipeline_status IN ('success', 'failed')
         """, 3))
 
-# ── 3. Check if DF might join on pipeline_id instead of project_url ────────────
-# Look at what filter_name values exist for DF KPI rows
-out("fvu.df_kpi_filter_names", [r.asDict() for r in sql(f"""
-    SELECT filter_name, tool_type, COUNT(*) AS n
+# ── 3. Check if DF uses pipeline_id vs project_url — look at the view columns ──
+out("fvu.real_df_kpi_tool_types", [r.asDict() for r in sql(f"""
+    SELECT tool_type, COUNT(*) AS n
     FROM {CATALOG}.master_data.filter_values_unity
     WHERE array_contains(kpi_uuids, '{DF_KPI}')
-    GROUP BY 1, 2
+      AND filter_group_id != '{OUR_FGID}'
+    GROUP BY 1
     ORDER BY n DESC
 """).limit(10).collect()])
+
+# Also check what columns the view exposes for DF rows
+out("fvu.real_df_view_columns_sample", rows(f"""
+    SELECT *
+    FROM {CATALOG}.master_data.v_filter_group_values_kpi_flattened_unity
+    WHERE kpi_uuids = '{DF_KPI}'
+      AND filter_group_id != '{OUR_FGID}'
+""", 2))
