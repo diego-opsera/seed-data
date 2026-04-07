@@ -75,6 +75,11 @@ def _ts(dt):
     return f"TIMESTAMP '{dt.strftime('%Y-%m-%d %H:%M:%S')}'"
 
 
+def _td(dt):
+    """Date-only timestamp (midnight) — used for *_date columns."""
+    return f"TIMESTAMP '{dt.strftime('%Y-%m-%d')} 00:00:00'"
+
+
 # ── pipeline_activities rows (DF chart) ───────────────────────────────────────
 
 def _pa_rows(catalog):
@@ -98,12 +103,15 @@ def _pa_rows(catalog):
             conc     = "Failed" if i < failed else "Succeeded"
 
             rows.append(
-                f"  ({_sq('github')}, {_sq(_PROJECT_URL)}, {_sq('project_001')}, "
-                f"{_sq(_PIPELINE_ID)}, {_sq(str(run))}, {_sq('acme-deploy-pipeline')}, "
+                f"  ({_sq('github')}, {_sq('github-workflow')}, {_sq(_PROJECT_URL)}, "
+                f"{_sq('project_001')}, {_sq(_PIPELINE_ID)}, {_sq(str(run))}, {_sq('1')}, "
+                f"{_sq('acme-deploy-pipeline')}, "
                 f"{_sq(status)}, {_ts(started)}, {_ts(finished)}, "
+                f"{_td(started)}, {_td(finished)}, "
                 f"{_sq(f'step-{run:05d}')}, {_sq('deploy')}, {_sq(status)}, {_sq(conc)}, "
                 f"{_ts(started)}, {_ts(finished)}, "
-                f"{_sq('main')}, {_sq(_RECORD_BY)}, "
+                f"{_td(started)}, {_td(finished)}, "
+                f"{_sq('main')}, {_sq('rest_api')}, {_sq(_RECORD_BY)}, "
                 f"CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())"
             )
     return rows
@@ -176,12 +184,14 @@ def _cfr_rows(catalog):
 
 _PA_HDR = """\
 INSERT INTO {catalog}.base_datasets.pipeline_activities
-  (pipeline_source, project_url, project_name, pipeline_id,
-   pipeline_run_count, pipeline_name, pipeline_status,
-   pipeline_started_at, pipeline_finished_at,
+  (pipeline_source, tool_identifier, project_url, project_name,
+   pipeline_id, pipeline_run_count, pipeline_run_attempt, pipeline_name,
+   pipeline_status, pipeline_started_at, pipeline_finished_at,
+   pipeline_started_date, pipeline_finished_date,
    step_id, step_type, step_status, step_conclusion,
    step_started_at, step_finished_at,
-   branch, record_inserted_by,
+   step_started_date, step_finished_date,
+   branch, data_source, record_inserted_by,
    record_insert_date, source_record_insert_date)
 VALUES
 {values}"""
