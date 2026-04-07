@@ -12,8 +12,11 @@ def rows(q, n=5): return [r.asDict() for r in sql(q).limit(n).collect()]
 def out(label, data): print(f"\n### {label}"); print(json.dumps(data, default=str, indent=2))
 
 # ── 1. Real filter_values_unity rows for DF KPI (not ours) ────────────────────
+# Show all columns to understand filter_name equivalent
+out("fvu.schema", [r.asDict() for r in sql(f"DESCRIBE {CATALOG}.master_data.filter_values_unity").collect()])
+
 out("fvu.real_df_kpi_rows", rows(f"""
-    SELECT filter_group_id, tool_type, filter_values, active
+    SELECT *
     FROM {CATALOG}.master_data.filter_values_unity
     WHERE array_contains(kpi_uuids, '{DF_KPI}')
       AND filter_group_id != '{OUR_FGID}'
@@ -41,12 +44,12 @@ if real_df_fgids:
     if level_rows:
         lvl3 = level_rows[0]["level_3"]
 
-        # What does the view return for this level_3?
-        out("view.real_df_row", rows(f"""
-            SELECT level_3, filter_group_id, kpi_uuids, tool_type, project_url, pipeline_id
+        # What does the view return for this level_3? — show ALL columns
+        out("view.real_df_row_all_cols", rows(f"""
+            SELECT *
             FROM {CATALOG}.master_data.v_filter_group_values_kpi_flattened_unity
             WHERE level_3 = '{lvl3}' AND kpi_uuids = '{DF_KPI}'
-        """, 3))
+        """, 1))
 
         # Simulate the join — what does it return?
         out("real_df_join_sample", rows(f"""
