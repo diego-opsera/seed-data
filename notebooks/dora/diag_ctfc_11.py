@@ -47,20 +47,23 @@ out("itsm.board_info_count", [{"with_board": count(f"""
 
 # ── 5. Simulate chart join: issues × filter (project_name + issue_status) ────
 out("ctfc.sim_join_via_filter", rows(f"""
-    SELECT i.issue_key, i.issue_project, i.issue_status, i.issue_type,
-           i.issue_created, i.issue_resolution_date,
-           bi.board_id, bi.board_name,
-           datediff(i.issue_resolution_date, i.issue_created) AS cycle_days
-    FROM {CATALOG}.base_datasets.v_itsm_issues_current i
-    LATERAL VIEW EXPLODE(i.board_info) AS bi
+    SELECT e.issue_key, e.issue_project, e.issue_status, e.issue_type,
+           e.issue_created, e.issue_resolution_date,
+           e.bi.board_id AS board_id, e.bi.board_name AS board_name,
+           datediff(e.issue_resolution_date, e.issue_created) AS cycle_days
+    FROM (
+        SELECT i.*, bi
+        FROM {CATALOG}.base_datasets.v_itsm_issues_current i
+        LATERAL VIEW EXPLODE(i.board_info) t AS bi
+    ) e
     JOIN (
         SELECT project_name, issue_status, board_ids
         FROM {CATALOG}.master_data.v_filter_group_values_kpi_flattened_unity
         WHERE level_3 = '{LEVEL_3}' AND kpi_uuids = '{CTFC_KPI}'
         LIMIT 1
-    ) f ON array_contains(f.project_name, i.issue_project)
-       AND array_contains(f.issue_status, i.issue_status)
-       AND array_contains(f.board_ids, CAST(bi.board_id AS STRING))
+    ) f ON array_contains(f.project_name, e.issue_project)
+       AND array_contains(f.issue_status, e.issue_status)
+       AND array_contains(f.board_ids, CAST(e.bi.board_id AS STRING))
 """, 3))
 
 # ── 6. What date range does our data cover? ───────────────────────────────────
