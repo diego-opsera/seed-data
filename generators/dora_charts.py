@@ -108,7 +108,7 @@ def _pa_rows(catalog):
                 f"{_sq('acme-deploy-pipeline')}, "
                 f"{_sq(status)}, {_ts(started)}, {_ts(finished)}, "
                 f"{_td(started)}, {_td(finished)}, "
-                f"{_sq(f'step-{run:05d}')}, {_sq('deploy')}, {_sq(status)}, {_sq(conc)}, "
+                f"{_sq(f'step-{run:05d}')}, {_sq('deploy')}, {_sq('deploy')}, {_sq(status)}, {_sq(conc)}, "
                 f"{_ts(started)}, {_ts(finished)}, "
                 f"{_td(started)}, {_td(finished)}, "
                 f"{_sq('main')}, {_sq('rest_api')}, {_sq(_RECORD_BY)}, "
@@ -188,7 +188,7 @@ INSERT INTO {catalog}.base_datasets.pipeline_activities
    pipeline_id, pipeline_run_count, pipeline_run_attempt, pipeline_name,
    pipeline_status, pipeline_started_at, pipeline_finished_at,
    pipeline_started_date, pipeline_finished_date,
-   step_id, step_type, step_status, step_conclusion,
+   step_id, step_type, step_name, step_status, step_conclusion,
    step_started_at, step_finished_at,
    step_started_date, step_finished_date,
    branch, data_source, record_inserted_by,

@@ -70,7 +70,44 @@ spark.sql(f"""
         'user', true, 1
     )
 """)
-print(f"filter_values_unity (jira/project_name): id={FVU_JIRA_ID}")
+# ── 4. filter_values_unity — deployment stages (which step names = a deployment) ─
+# deployment_stages must match step_name in pipeline_activities
+FVU_STAGES_ID = str(uuid.uuid4())
+spark.sql(f"""
+    INSERT INTO {CATALOG}.master_data.filter_values_unity
+        (id, filter_group_id, tool_type, filter_name, filter_values, kpi_uuids,
+         custom_fieldName, created_by, created_at, updated_by, updated_at,
+         source, active, sort_number)
+    VALUES (
+        '{FVU_STAGES_ID}', '{FILTER_GROUP_ID}',
+        'github', 'deployment_stages',
+        array('deploy'),
+        array('{DF_KPI}', '{LTFC_KPI}'),
+        'null', 'seed-data@demo.io', CURRENT_TIMESTAMP(),
+        'seed-data@demo.io', CURRENT_TIMESTAMP(),
+        'user', true, 2
+    )
+""")
+print(f"filter_values_unity (github/deployment_stages): id={FVU_STAGES_ID}")
+
+# ── 5. filter_values_unity — pipeline status success filter ───────────────────
+FVU_STATUS_ID = str(uuid.uuid4())
+spark.sql(f"""
+    INSERT INTO {CATALOG}.master_data.filter_values_unity
+        (id, filter_group_id, tool_type, filter_name, filter_values, kpi_uuids,
+         custom_fieldName, created_by, created_at, updated_by, updated_at,
+         source, active, sort_number)
+    VALUES (
+        '{FVU_STATUS_ID}', '{FILTER_GROUP_ID}',
+        'github', 'pipeline_status_success',
+        array('success'),
+        array('{DF_KPI}', '{LTFC_KPI}'),
+        'null', 'seed-data@demo.io', CURRENT_TIMESTAMP(),
+        'seed-data@demo.io', CURRENT_TIMESTAMP(),
+        'user', true, 3
+    )
+""")
+print(f"filter_values_unity (github/pipeline_status_success): id={FVU_STATUS_ID}")
 
 print(json.dumps({
     "filter_group_id": FILTER_GROUP_ID,
