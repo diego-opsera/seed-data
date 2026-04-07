@@ -101,7 +101,7 @@ def _pa_rows(catalog):
                 f"  ({_sq('github')}, {_sq(_PROJECT_URL)}, {_sq('project_001')}, "
                 f"{_sq(_PIPELINE_ID)}, {_sq(str(run))}, {_sq('acme-deploy-pipeline')}, "
                 f"{_sq(status)}, {_ts(started)}, {_ts(finished)}, "
-                f"{_sq(f'step-{run:05d}')}, {_sq('Deploy')}, {_sq(status)}, {_sq(conc)}, "
+                f"{_sq(f'step-{run:05d}')}, {_sq('deploy')}, {_sq(status)}, {_sq(conc)}, "
                 f"{_ts(started)}, {_ts(finished)}, "
                 f"{_sq('main')}, {_sq(_RECORD_BY)}, "
                 f"CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())"
