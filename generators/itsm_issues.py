@@ -212,7 +212,8 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                 f"{_sql_val(team_name)}, NULL, "  # team_name, service_component
                 f"NULL, NULL, "  # incident_start/end
                 f"{_sql_val(team_name)}, "  # opsera_team_name
-                f"ARRAY(), ARRAY(), ARRAY(), ARRAY(), ARRAY(), "  # board_info, filter_info, labels, components, investment_category
+                f"ARRAY(NAMED_STRUCT('board_id', CAST(1 AS BIGINT), 'board_name', 'ACME Board', 'board_type', 'scrum')), "  # board_info
+                f"ARRAY(), ARRAY(), ARRAY(), ARRAY(), "  # filter_info, labels, components, investment_category
                 f"'jira', "
                 f"TIMESTAMP '{insert_ts}', TIMESTAMP '{insert_ts}', DATE '2026-03-31')"
             )
