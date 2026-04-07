@@ -1,88 +1,74 @@
-# Diagnostic round 4: understand filter_groups_unity in detail + v_filter_group_values_kpi_flattened_unity
-# Goal: learn what a complete row looks like so we can insert a demo-acme-corp entry
+# Diagnostic round 4: filter_groups_unity + v_filter_group_values_kpi_flattened_unity
+# Output is JSON/compact text — machine-readable for Claude, not pretty-printed tables
 # Run via exec(notebook.read()) in the Databricks notebook
+
+import json
 
 CATALOG = "playground_prod"
 
-# ── 1. filter_groups_unity: full schema ─────────────────────────────────────
-print("=== DESCRIBE master_data.filter_groups_unity ===")
-spark.sql(f"DESCRIBE {CATALOG}.master_data.filter_groups_unity").show(60, False)
+def sql(q):
+    return spark.sql(q)
 
-# ── 2. filter_groups_unity: row count ───────────────────────────────────────
-n = spark.sql(f"SELECT COUNT(*) AS n FROM {CATALOG}.master_data.filter_groups_unity").collect()[0]["n"]
-print(f"\nTotal rows: {n:,}")
+def rows(q, limit=10):
+    return [r.asDict() for r in sql(q).limit(limit).collect()]
 
-# ── 3. filter_groups_unity: 10 full rows (all columns) ──────────────────────
-print("\n=== filter_groups_unity: 10 full rows ===")
-spark.sql(f"SELECT * FROM {CATALOG}.master_data.filter_groups_unity LIMIT 10").show(10, False)
+def schema(table):
+    return {r["col_name"]: r["data_type"] for r in sql(f"DESCRIBE {table}").collect() if r["col_name"] and not r["col_name"].startswith("#")}
 
-# ── 4. filter_groups_unity: distinct level_1 values (top of org tree) ────────
-print("\n=== filter_groups_unity: distinct level_1 values ===")
-spark.sql(f"""
-    SELECT level_1, COUNT(*) AS n
-    FROM {CATALOG}.master_data.filter_groups_unity
-    GROUP BY level_1 ORDER BY n DESC LIMIT 20
-""").show(20, False)
+def ddl(table):
+    return sql(f"SHOW CREATE TABLE {table}").collect()[0][0]
 
-# ── 5. filter_groups_unity: drill into one org — show level_2/3/4/5 breakdown
-print("\n=== filter_groups_unity: level hierarchy for first org ===")
-spark.sql(f"""
-    SELECT level_1, level_2, level_3, level_4, level_5, id
-    FROM {CATALOG}.master_data.filter_groups_unity
+def out(label, data):
+    print(f"\n### {label}")
+    print(json.dumps(data, default=str, indent=2))
+
+# ── filter_groups_unity ──────────────────────────────────────────────────────
+
+FGU = f"{CATALOG}.master_data.filter_groups_unity"
+
+out("fgu.schema", schema(FGU))
+
+out("fgu.row_count", sql(f"SELECT COUNT(*) AS n FROM {FGU}").collect()[0]["n"])
+
+out("fgu.sample_10_rows", rows(f"SELECT * FROM {FGU}", 10))
+
+out("fgu.distinct_level_1", rows(f"""
+    SELECT level_1, COUNT(*) AS n FROM {FGU}
+    GROUP BY level_1 ORDER BY n DESC
+""", 20))
+
+out("fgu.hierarchy_sample", rows(f"""
+    SELECT level_1, level_2, level_3, level_4, level_5, id FROM {FGU}
     ORDER BY level_1, level_2, level_3, level_4, level_5
-    LIMIT 20
-""").show(20, False)
+""", 20))
 
-# ── 6. filter_groups_unity: look for any demo / acme / opsera rows ───────────
-print("\n=== filter_groups_unity: rows containing 'demo', 'acme', or 'opsera' ===")
-spark.sql(f"""
-    SELECT *
-    FROM {CATALOG}.master_data.filter_groups_unity
-    WHERE lower(level_1) LIKE '%demo%' OR lower(level_1) LIKE '%acme%' OR lower(level_1) LIKE '%opsera%'
-       OR lower(level_2) LIKE '%demo%' OR lower(level_2) LIKE '%acme%' OR lower(level_2) LIKE '%opsera%'
-       OR lower(level_3) LIKE '%demo%' OR lower(level_3) LIKE '%acme%' OR lower(level_3) LIKE '%opsera%'
-       OR lower(level_4) LIKE '%demo%' OR lower(level_4) LIKE '%acme%' OR lower(level_4) LIKE '%opsera%'
-       OR lower(level_5) LIKE '%demo%' OR lower(level_5) LIKE '%acme%' OR lower(level_5) LIKE '%opsera%'
-    LIMIT 20
-""").show(20, False)
+out("fgu.demo_acme_opsera_rows", rows(f"""
+    SELECT * FROM {FGU}
+    WHERE lower(concat_ws(' ', level_1, level_2, level_3, level_4, level_5))
+          RLIKE 'demo|acme|opsera'
+""", 20))
 
-# ── 7. filter_groups_unity: SHOW CREATE TABLE (catch all hidden columns/types)
-print("\n=== SHOW CREATE TABLE master_data.filter_groups_unity ===")
-spark.sql(f"SHOW CREATE TABLE {CATALOG}.master_data.filter_groups_unity").show(1, False)
+out("fgu.ddl", ddl(FGU))
 
-# ── 8. v_filter_group_values_kpi_flattened_unity: schema ────────────────────
-print("\n=== DESCRIBE master_data.v_filter_group_values_kpi_flattened_unity ===")
-spark.sql(f"DESCRIBE {CATALOG}.master_data.v_filter_group_values_kpi_flattened_unity").show(60, False)
+# ── v_filter_group_values_kpi_flattened_unity ────────────────────────────────
 
-# ── 9. v_filter_group_values_kpi_flattened_unity: row count ─────────────────
-n = spark.sql(f"SELECT COUNT(*) AS n FROM {CATALOG}.master_data.v_filter_group_values_kpi_flattened_unity").collect()[0]["n"]
-print(f"\nTotal rows: {n:,}")
+FGVF = f"{CATALOG}.master_data.v_filter_group_values_kpi_flattened_unity"
 
-# ── 10. v_filter_group_values_kpi_flattened_unity: 5 full rows ───────────────
-print("\n=== v_filter_group_values_kpi_flattened_unity: SELECT * LIMIT 5 ===")
-spark.sql(f"SELECT * FROM {CATALOG}.master_data.v_filter_group_values_kpi_flattened_unity LIMIT 5").show(5, False)
+out("fgvf.schema", schema(FGVF))
 
-# ── 11. v_filter_group_values_kpi_flattened_unity: distinct level_1 values ──
-print("\n=== v_filter_group_values_kpi_flattened_unity: distinct level_1 values ===")
-spark.sql(f"""
-    SELECT level_1, COUNT(*) AS n
-    FROM {CATALOG}.master_data.v_filter_group_values_kpi_flattened_unity
-    GROUP BY level_1 ORDER BY n DESC LIMIT 20
-""").show(20, False)
+out("fgvf.row_count", sql(f"SELECT COUNT(*) AS n FROM {FGVF}").collect()[0]["n"])
 
-# ── 12. v_filter_group_values_kpi_flattened_unity: look for demo/acme rows ──
-print("\n=== v_filter_group_values_kpi_flattened_unity: rows containing 'demo' or 'acme' ===")
-spark.sql(f"""
-    SELECT *
-    FROM {CATALOG}.master_data.v_filter_group_values_kpi_flattened_unity
-    WHERE lower(level_1) LIKE '%demo%' OR lower(level_1) LIKE '%acme%'
-       OR lower(level_2) LIKE '%demo%' OR lower(level_2) LIKE '%acme%'
-       OR lower(level_3) LIKE '%demo%' OR lower(level_3) LIKE '%acme%'
-       OR lower(level_4) LIKE '%demo%' OR lower(level_4) LIKE '%acme%'
-       OR lower(level_5) LIKE '%demo%' OR lower(level_5) LIKE '%acme%'
-    LIMIT 10
-""").show(10, False)
+out("fgvf.sample_5_rows", rows(f"SELECT * FROM {FGVF}", 5))
 
-# ── 13. v_filter_group_values_kpi_flattened_unity: DDL ──────────────────────
-print("\n=== SHOW CREATE TABLE master_data.v_filter_group_values_kpi_flattened_unity ===")
-spark.sql(f"SHOW CREATE TABLE {CATALOG}.master_data.v_filter_group_values_kpi_flattened_unity").show(1, False)
+out("fgvf.distinct_level_1", rows(f"""
+    SELECT level_1, COUNT(*) AS n FROM {FGVF}
+    GROUP BY level_1 ORDER BY n DESC
+""", 20))
+
+out("fgvf.demo_acme_rows", rows(f"""
+    SELECT * FROM {FGVF}
+    WHERE lower(concat_ws(' ', level_1, level_2, level_3, level_4, level_5))
+          RLIKE 'demo|acme'
+""", 10))
+
+out("fgvf.ddl", ddl(FGVF))
