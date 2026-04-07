@@ -15,7 +15,15 @@ DF_KPI   = "60aed2f8-1c74-4792-ad51-bf4e5a65f7b9"
 LTFC_KPI = "a9337c02-a00e-40ad-9cdc-2d18dfd771c9"
 CFR_KPI  = "ab9a59ba-a19c-4358-b195-1648797f77c2"
 MTTR_KPI = "906f4f2b-a299-4b24-9a24-2330f45dd493"
-CTFC_KPI = "0cb8981e-3a17-4a14-b1f3-83bcecf10373"
+# All CTFC chart UUIDs (from kpiIdentifierConfig.json: ctfc_custom_*)
+CTFC_KPIS = [
+    "f60d8a58-7c8d-4dd6-9b54-6c07715ae5ec",  # ctfc_custom_overview
+    "7f0d028a-06fd-4c1d-8915-3f94c53899e2",  # ctfc_custom_sine_wave
+    "c03790e5-874b-4c64-bae9-3f6e21e5b42e",  # ctfc_custom_compare_chart
+    "26e4b366-78a3-4d2d-b1d6-afcf93db8269",  # ctfc_custom_tab_data_points
+    "8b81e5db-9b51-43fc-bf9a-6fa78a3b5f89",  # ctfc_custom_table_data
+    "6b81e5db-9b51-43fc-bf9a-6fa78a3b5f89",  # ctfc_custom_table_data (alt)
+]
 
 # ── 1. filter_groups_unity — hierarchy entry ───────────────────────────────────
 # level_3 = 'demo-acme-corp' must match sdm.level in consumption_layer.sdm
@@ -143,7 +151,7 @@ for _fname, _fvals, _sort in _ctfc_filters:
             '{_id}', '{FILTER_GROUP_ID}',
             'jira', '{_fname}',
             array({_vals_sql}),
-            array('{CTFC_KPI}'),
+            array({", ".join(f"'{k}'" for k in CTFC_KPIS)}),
             'null', 'seed-data@demo.io', CURRENT_TIMESTAMP(),
             'seed-data@demo.io', CURRENT_TIMESTAMP(),
             'user', true, {_sort}
