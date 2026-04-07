@@ -56,8 +56,8 @@ spark.sql(f"SELECT * FROM {CATALOG}.master_data.projects_table LIMIT 5").show(5,
 print("\n=== projects_table: distinct customer / org scoping values ===")
 spark.sql(f"""
     SELECT * FROM {CATALOG}.master_data.projects_table
-    WHERE lower(project_name) LIKE '%insight%'
-       OR lower(project_name) LIKE '%opsera%'
+    WHERE lower(projectName) LIKE '%insight%'
+       OR lower(projectName) LIKE '%opsera%'
     LIMIT 10
 """).show(10, False)
 
