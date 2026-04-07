@@ -47,6 +47,7 @@ _N    = len(_MONTHS) - 1
 _D0   = date(2025, 4, 1)
 _D1   = date(2026, 3, 31)
 _SPAN = (_D1 - _D0).days
+_INC  = date(2026, 3, 18)   # incident date — mirrors dora.py / SnapLogic scenario
 
 
 def _mt(yr, mo):
@@ -101,21 +102,21 @@ def _pa_rows(catalog):
         t      = _mt(yr, mo)
         s      = yr * 100 + mo
         total  = jitter(round(lerp(8, 80, t)), 12, s)
-        frate  = lerp(0.42, 0.04, t)
-        if (yr, mo) == (2026, 3):
-            frate = 0.22
+        frate  = lerp(0.42, 0.04, t)   # no month-level March bump; incident cluster handles it
         failed = max(0, round(total * frate))
 
-        for i, d in enumerate(_spread(_business_days(yr, mo), total)):
+        bdays = _business_days(yr, mo)
+        rng_d = random.Random(s + 99)
+        deploy_days = sorted(rng_d.choices(bdays, k=total))
+
+        for i, d in enumerate(deploy_days):
             run += 1
             rng      = random.Random(s * 1000 + i)
             started  = datetime(yr, mo, d.day, rng.randint(9, 17), rng.randint(0, 59))
             finished = started + timedelta(minutes=rng.randint(5, 30))
             status   = "failed" if i < failed else "success"
             conc     = "Failed" if i < failed else "Succeeded"
-            # Successful deployments get a commit SHA so CTFC chart can join
             commit_sha = _sq(_make_sha(f'acme-deploy-{run}')) if status == "success" else "NULL"
-
             rows.append(
                 f"  ({_sq('github')}, {_sq('github-workflow')}, {_sq(_PROJECT_URL)}, "
                 f"{_sq('project_001')}, {_sq(_PIPELINE_ID)}, {_sq(str(run))}, {_sq('1')}, "
@@ -128,6 +129,29 @@ def _pa_rows(catalog):
                 f"{_sq('main')}, {_sq('rest_api')}, {commit_sha}, {_sq(_RECORD_BY)}, "
                 f"CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())"
             )
+
+        # March 18 incident: 6 emergency pipeline runs, all failed (hotfix attempts)
+        if (yr, mo) == (2026, 3) and _INC in bdays:
+            for i in range(6):
+                run += 1
+                rng     = random.Random(s * 3000 + i)
+                started = datetime(_INC.year, _INC.month, _INC.day,
+                                   rng.randint(8, 22), rng.randint(0, 59))
+                finished = started + timedelta(minutes=rng.randint(3, 45))
+                rows.append(
+                    f"  ({_sq('github')}, {_sq('github-workflow')}, {_sq(_PROJECT_URL)}, "
+                    f"{_sq('project_001')}, {_sq(_PIPELINE_ID)}, {_sq(str(run))}, {_sq('1')}, "
+                    f"{_sq('acme-deploy-pipeline')}, "
+                    f"{_sq('failed')}, {_ts(started)}, {_ts(finished)}, "
+                    f"{_td(started)}, {_td(finished)}, "
+                    f"{_sq(f'step-{run:05d}')}, {_sq('deploy')}, {_sq('deploy')}, "
+                    f"{_sq('failed')}, {_sq('Failed')}, "
+                    f"{_ts(started)}, {_ts(finished)}, "
+                    f"{_td(started)}, {_td(finished)}, "
+                    f"{_sq('main')}, {_sq('rest_api')}, NULL, {_sq(_RECORD_BY)}, "
+                    f"CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())"
+                )
+
     return rows
 
 
@@ -196,9 +220,7 @@ def _cfr_rows(catalog):
         t      = _mt(yr, mo)
         s      = yr * 100 + mo
         total  = jitter(round(lerp(8, 80, t)), 12, s)
-        frate  = lerp(0.42, 0.04, t)
-        if (yr, mo) == (2026, 3):
-            frate = 0.22
+        frate  = lerp(0.42, 0.04, t)   # no month-level March bump; incident cluster handles it
         failed = max(0, round(total * frate))
 
         avg_mttr = round(max(0.3, lerp(200.0, 0.5, t) + random.Random(s + 3).gauss(0, 3)), 2)
@@ -207,9 +229,11 @@ def _cfr_rows(catalog):
         tot_inc = jitter(round(lerp(8, 1, t)), 20, s + 4)
 
         bdays = _business_days(yr, mo)
+        rng_d = random.Random(s + 99)
+        deploy_days = sorted(rng_d.choices(bdays, k=total))
 
         # Change + failure issues (one per deployment, drives CFR)
-        for i, d in enumerate(_spread(bdays, total)):
+        for i, d in enumerate(deploy_days):
             issue += 1
             rng     = random.Random(s * 1000 + i)
             created = datetime(yr, mo, d.day, rng.randint(9, 17), rng.randint(0, 59))
@@ -226,6 +250,25 @@ def _cfr_rows(catalog):
                 f"NULL, {fail_key}, {_sq(key)}, "
                 f"NULL, CURRENT_TIMESTAMP(), {_sq(_RECORD_BY)})"
             )
+
+        # March 18 incident: 6 emergency deploys, all failures (hotfix attempts)
+        if (yr, mo) == (2026, 3) and _INC in bdays:
+            for i in range(6):
+                issue += 1
+                rng     = random.Random(s * 3000 + i)
+                created = datetime(_INC.year, _INC.month, _INC.day,
+                                   rng.randint(8, 22), rng.randint(0, 59))
+                resolved = created + timedelta(hours=1)
+                key      = f"ACME-{issue:04d}"
+                rows.append(
+                    f"  ({_sq(key)}, {_sq('Story')}, {_sq('Closed')}, {_sq(_ISSUE_PROJECT)}, "
+                    f"{_sq('Done')}, {_ts(created)}, {_ts(resolved)}, "
+                    f"{_sq('jira')}, {_ts(resolved)}, {_sq('High')}, "
+                    f"{_sq('Demo User')}, {_sq(f'https://acme.atlassian.net/browse/{key}')}, "
+                    f"{_sq(f'Incident hotfix #{i+1}')}, "
+                    f"NULL, {_sq(key)}, {_sq(key)}, "
+                    f"NULL, CURRENT_TIMESTAMP(), {_sq(_RECORD_BY)})"
+                )
 
         # Incident issues (drives MTTR — mttr_issue_key IS NOT NULL)
         for j, d in enumerate(_spread(bdays, tot_inc)):
