@@ -32,9 +32,9 @@ out("pa.sample_3_rows", rows(f"SELECT * FROM {PA}", 3))
 out("pa.ddl", ddl(PA))
 
 # distinct values for key joining/scoping columns
-out("pa.distinct_org_name", rows(f"""
-    SELECT org_name, COUNT(*) AS n FROM {PA}
-    GROUP BY org_name ORDER BY n DESC
+out("pa.distinct_account_name", rows(f"""
+    SELECT account_name, COUNT(*) AS n FROM {PA}
+    GROUP BY account_name ORDER BY n DESC
 """, 20))
 
 # ── cfr_mttr_metric_data ──────────────────────────────────────────────────────
