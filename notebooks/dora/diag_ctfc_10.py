@@ -14,7 +14,7 @@ def out(label, data): print(f"\n### {label}"); print(json.dumps(data, default=st
 
 # ── 1. Demo-acme-corp filter_group_id ─────────────────────────────────────────
 out("fgu.acme_corp_row", [r.asDict() for r in sql(f"""
-    SELECT filter_group_id, customer_id, level_3
+    SELECT filter_group_id, level_1, level_2, level_3, level_4
     FROM {CATALOG}.master_data.filter_groups_unity
     WHERE level_3 = '{LEVEL_3}'
     LIMIT 3
