@@ -27,6 +27,8 @@ for i, sql in enumerate(all_statements, 1):
         tbl = "pipeline_activities"
     elif "cfr_mttr_metric_data" in sql:
         tbl = "cfr_mttr_metric_data"
+    elif "pipeline_deployment_commits" in sql:
+        tbl = "pipeline_deployment_commits"
     else:
         tbl = sql.split("consumption_layer.")[1].split("\n")[0].strip()
     print(f"[{i}/{len(all_statements)}] {tbl}...", end=" ")
