@@ -166,9 +166,7 @@ def _pdc_rows(catalog):
         t      = _mt(yr, mo)
         s      = yr * 100 + mo
         total  = jitter(round(lerp(8, 80, t)), 12, s)
-        frate  = lerp(0.42, 0.04, t)
-        if (yr, mo) == (2026, 3):
-            frate = 0.22
+        frate  = lerp(0.42, 0.04, t)   # must match _pa_rows so is_success aligns
         failed = max(0, round(total * frate))
 
         # CTFC target in days — mirrors dora.py lerp(22.0, 3.5, t)
@@ -176,7 +174,13 @@ def _pdc_rows(catalog):
         if (yr, mo) == (2026, 3):
             ctfc_days = 5.0  # slight regression during incident month
 
-        for i, d in enumerate(_spread(_business_days(yr, mo), total)):
+        # Same seed as _pa_rows so deploy days are identical — ensures
+        # committed_dt = started - ctfc_h < started → LTFC always positive
+        bdays = _business_days(yr, mo)
+        rng_d = random.Random(s + 99)
+        deploy_days = sorted(rng_d.choices(bdays, k=total))
+
+        for i, d in enumerate(deploy_days):
             run += 1
             is_success = (i >= failed)
             if not is_success:
