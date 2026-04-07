@@ -60,3 +60,31 @@ try:
     print(f"cfr_mttr_metric_data: deleted  ({n} remaining — should be 0)")
 except Exception as e:
     print(f"cfr_mttr_metric_data: ERROR — {e}")
+
+# ── filter_groups_unity + filter_values_unity ─────────────────────────────────
+try:
+    n = spark.sql(f"""
+        SELECT COUNT(*) FROM {CATALOG}.master_data.filter_groups_unity
+        WHERE createdBy = 'seed-data@demo.io'
+    """).collect()[0][0]
+    spark.sql(f"DELETE FROM {CATALOG}.master_data.filter_groups_unity WHERE createdBy = 'seed-data@demo.io'")
+    print(f"filter_groups_unity: deleted {n} rows")
+except Exception as e:
+    print(f"filter_groups_unity: ERROR — {e}")
+
+try:
+    n = spark.sql(f"""
+        SELECT COUNT(*) FROM {CATALOG}.master_data.filter_values_unity
+        WHERE created_by = 'seed-data@demo.io'
+    """).collect()[0][0]
+    spark.sql(f"DELETE FROM {CATALOG}.master_data.filter_values_unity WHERE created_by = 'seed-data@demo.io'")
+    print(f"filter_values_unity: deleted {n} rows")
+except Exception as e:
+    print(f"filter_values_unity: ERROR — {e}")
+
+# ── raw_jira_boards_ci (underlies jira_boards view, board_id=1 is ours) ───────
+try:
+    spark.sql(f"DELETE FROM {CATALOG}.source_to_stage.raw_jira_boards_ci WHERE board_id = 1")
+    print("raw_jira_boards_ci: board_id=1 deleted")
+except Exception as e:
+    print(f"raw_jira_boards_ci: ERROR — {e}")
