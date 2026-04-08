@@ -17,7 +17,7 @@ Deletion is scoped via merge_request_id LIKE 'demo-seed-pr-%'
 so existing rows from other orgs are never touched.
 """
 import random
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from .utils import date_range, expand_users, active_user_count, lerp, _sql_val
 
 TABLE = "pull_requests"
@@ -25,11 +25,14 @@ TABLE = "pull_requests"
 INSERT_SQL = """\
 INSERT INTO {catalog}.base_datasets.pull_requests
   (org_name, project_name, project_url, pr_user_name, merge_request_user,
+   pr_user_id,
    merge_request_id, merge_request_url, merge_request_title,
    pr_state, merge_status,
    pr_created_datetime, pr_created_date,
    pr_merged_datetime, pr_merged_date,
    pr_closed_datetime, pr_closed_date,
+   first_commit_id,
+   first_pr_review_submitted_datetime,
    pr_commits,
    source_branch, target_branch,
    lines_added, lines_removed,
@@ -56,14 +59,34 @@ def _fake_sha(seed: int) -> str:
     return "".join(rng.choices("0123456789abcdef", k=40))
 
 
+def _last_weekday_before(d: date) -> date:
+    """Return the most recent weekday strictly before d."""
+    prev = d - timedelta(days=1)
+    while prev.weekday() >= 5:
+        prev -= timedelta(days=1)
+    return prev
+
+
 def _pr_commits_sql(rng: random.Random, user: dict, n_commits: int,
-                    pr_date: date, copilot_flag: str) -> str:
-    """Build an ARRAY of pr_commit NAMED_STRUCTs."""
+                    pr_date: date, copilot_flag: str,
+                    first_sha: str, first_commit_day: date) -> str:
+    """Build an ARRAY of pr_commit NAMED_STRUCTs.
+
+    first_sha / first_commit_day are seeded to match commits_rest_api so
+    the commit-to-PR join (pr.first_commit_id = c.commit_id) succeeds.
+    All commits are timestamped before pr_date so coding_time > 0.
+    """
     structs = []
     for i in range(n_commits):
-        commit_day = pr_date + timedelta(days=rng.randint(0, 2))
+        if i == 0:
+            sha = first_sha
+            commit_day = first_commit_day
+        else:
+            # Additional commits: 1-2 days before PR creation
+            commit_day = pr_date - timedelta(days=rng.randint(1, 2))
+            sha = _fake_sha(hash((str(pr_date), user["id"], i, "pr")) % (2**31))
+
         commit_ts  = f"{commit_day.isoformat()} {rng.randint(9, 17):02d}:{rng.randint(0,59):02d}:00"
-        sha        = _fake_sha(hash((str(pr_date), user["id"], i, "pr")) % (2**31))
         lines_add  = str(rng.randint(10, 150))
         lines_rem  = str(rng.randint(0,  50))
         lines_mod  = str(int(lines_add) + int(lines_rem))
@@ -143,8 +166,26 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                     merged_ts  = None
                     closed_ts  = None
 
+                # first_commit matches commits_rest_api: same seed formula as commits.py
+                first_commit_day = _last_weekday_before(d)
+                first_commit_seed = hash((str(first_commit_day), user["id"], 0)) % (2**31)
+                first_commit_sha = _fake_sha(first_commit_seed)
+
                 n_commits   = rng.randint(2, 6)
-                commits_sql = _pr_commits_sql(rng, user, n_commits, d, pr_type)
+                commits_sql = _pr_commits_sql(
+                    rng, user, n_commits, d, pr_type,
+                    first_sha=first_commit_sha, first_commit_day=first_commit_day,
+                )
+
+                # first_pr_review_submitted_datetime — pickup time after PR creation
+                pickup_hours = rng.randint(2, 8) if pr_type == "Y" else rng.randint(4, 24)
+                created_dt = datetime.strptime(created_ts, "%Y-%m-%d %H:%M:%S")
+                review_submitted_dt = created_dt + timedelta(hours=pickup_hours)
+                if pr_state == "closed" and merged_ts:
+                    merged_dt = datetime.strptime(merged_ts, "%Y-%m-%d %H:%M:%S")
+                    if review_submitted_dt >= merged_dt:
+                        review_submitted_dt = merged_dt - timedelta(hours=1)
+                review_submitted_sql = f"TIMESTAMP '{review_submitted_dt.strftime('%Y-%m-%d %H:%M:%S')}'"
 
                 lines_add = str(rng.randint(50, 500))
                 lines_rem = str(rng.randint(10, 150))
@@ -157,11 +198,14 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                 value_lines.append(
                     f"  ({_sql_val(org_name)}, {_sql_val(repo_name)}, {_sql_val(repo_url)}, "
                     f"{_sql_val(user['login'])}, {_sql_val(user['login'])}, "
+                    f"{user['id']}, "
                     f"{_sql_val(pr_id)}, {_sql_val(pr_url)}, {_sql_val(title)}, "
                     f"{_sql_val(pr_state)}, {str(merge_status).upper()}, "
                     f"TIMESTAMP '{created_ts}', DATE '{d.isoformat()}', "
                     f"{merged_ts_sql}, {merged_d_sql}, "
                     f"{closed_ts_sql}, {closed_d_sql}, "
+                    f"{_sql_val(first_commit_sha)}, "
+                    f"{review_submitted_sql}, "
                     f"{commits_sql}, "
                     f"'feature/{user['login']}-patch', 'main', "
                     f"{_sql_val(lines_add)}, {_sql_val(lines_rem)}, "

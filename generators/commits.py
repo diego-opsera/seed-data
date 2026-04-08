@@ -16,7 +16,7 @@ INSERT_SQL = """\
 INSERT INTO {catalog}.base_datasets.{table}
   (commit_id, commit_date, commit_timestamp, org_name, project_name, project_url,
    cleansed_user_name, cleansed_commit_author, user_id, copilot_commit_flag,
-   lines_added, lines_removed, before_sha, file_extension)
+   lines_added, lines_removed, before_sha, has_ticket_id, file_extension)
 VALUES
 {values};"""
 
@@ -31,10 +31,10 @@ _LANG_EXT = {
 
 # Projects mapped to user teams
 _TEAM_PROJECT = {
-    "demo-frontend": ("demo-acme-corp/frontend",    "https://github.com/demo-acme-corp/frontend"),
-    "demo-backend":  ("demo-acme-corp/backend",     "https://github.com/demo-acme-corp/backend"),
+    "demo-frontend": ("demo-acme-direct/frontend",    "https://github.com/demo-acme-direct/frontend"),
+    "demo-backend":  ("demo-acme-direct/backend",     "https://github.com/demo-acme-direct/backend"),
 }
-_DEFAULT_PROJECT = ("demo-acme-corp/api-gateway", "https://github.com/demo-acme-corp/api-gateway")
+_DEFAULT_PROJECT = ("demo-acme-direct/api-gateway", "https://github.com/demo-acme-direct/api-gateway")
 
 # Copilot attribution grows from 20% → 65% over the year
 _COPILOT_FLAG_RATE = (0.20, 0.65)
@@ -99,6 +99,8 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                 ]
                 file_ext_sql = f"ARRAY({', '.join(file_structs)})"
 
+                has_ticket = 1 if c_rng.random() < 0.38 else 0
+
                 value_lines.append(
                     f"  ({_sql_val(commit_id)}, {_sql_val(d)}, "
                     f"TIMESTAMP '{commit_ts}', "
@@ -106,7 +108,7 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                     f"{_sql_val(user['login'])}, {_sql_val(user['login'])}, "
                     f"{user['id']}, {_sql_val(copilot_flag)}, "
                     f"{lines_added}, {lines_removed}, "
-                    f"{_sql_val(before_sha)}, {file_ext_sql})"
+                    f"{_sql_val(before_sha)}, {has_ticket}, {file_ext_sql})"
                 )
 
     return [INSERT_SQL.format(catalog=catalog, table=TABLE, values=",\n".join(value_lines))]
