@@ -6,19 +6,19 @@ TEST_ORG = "demo-acme-direct"
 # are never touched:
 #   - org_name tables       : WHERE org_name      = 'demo-acme-direct'
 #   - organization tables   : WHERE organization  = 'demo-acme-direct'
-#   - pull_requests         : WHERE merge_request_id LIKE 'demo-seed-pr-%'
 #   - file_extensions       : no-op (MERGE insert, nothing to remove)
+#
+# NOT handled here (owned by devex/delete.py):
+#   pull_requests, commits_rest_api, raw_github_teams_members,
+#   mt_itsm_issues_current, mt_itsm_issues_hist
 # ─────────────────────────────────────────────────────────────────────────────
 
 # source_to_stage tables with org_name scope
-source_to_stage_tables = [
-    ("source_to_stage", "raw_github_teams_members"),
-]
+source_to_stage_tables = []
 
 # Tables whose org column is named org_name
 org_name_tables = [
     ("base_datasets",   "trf_github_copilot_direct_data"),
-    ("base_datasets",   "commits_rest_api"),
     ("source_to_stage", "raw_github_copilot_seats"),
     ("source_to_stage", "raw_github_copilot_billing"),
     ("master_data",     "github_copilot_orgs_mapping"),
@@ -40,11 +40,7 @@ consumption_level_name_tables = [
     ("consumption_layer", "ai_assistant_acceptance_info"),
 ]
 
-# ITSM issues scoped by customer_id
-itsm_tables = [
-    ("transform_stage", "mt_itsm_issues_current"),
-    ("transform_stage", "mt_itsm_issues_hist"),
-]
+itsm_tables = []  # owned by devex/delete.py
 
 for schema, table in source_to_stage_tables + org_name_tables:
     n = spark.sql(
@@ -76,15 +72,9 @@ for schema, table in itsm_tables:
     ).collect()[0][0]
     print(f"Deleted {n} rows from {schema}.{table}")
 
-# pull_requests: scoped to our seeded IDs only — never touches OpseraEngineering rows
-n = spark.sql(
-    f"DELETE FROM {CATALOG}.base_datasets.pull_requests "
-    f"WHERE merge_request_id LIKE 'demo-seed-pr-%'"
-).collect()[0][0]
-print(f"Deleted {n} rows from base_datasets.pull_requests")
-
 # file_extensions: shared reference table, insert is MERGE (no-op if row exists)
 print("Skipped master_data.file_extensions (shared reference table — MERGE insert only)")
+# pull_requests / commits / teams / itsm: owned by devex/delete.py (not handled here)
 
 # ── Verification ──────────────────────────────────────────────────────────────
 print("\nVerifying (should all be 0):")
@@ -98,11 +88,6 @@ for schema, table in organization_tables:
         f"SELECT COUNT(*) FROM {CATALOG}.{schema}.{table} WHERE organization = '{TEST_ORG}'"
     ).collect()[0][0]
     print(f"  {schema}.{table}: {n}")
-n = spark.sql(
-    f"SELECT COUNT(*) FROM {CATALOG}.base_datasets.pull_requests "
-    f"WHERE merge_request_id LIKE 'demo-seed-pr-%'"
-).collect()[0][0]
-print(f"  base_datasets.pull_requests (demo-seed-pr-* only): {n}")
 for schema, table in consumption_org_name_tables:
     n = spark.sql(
         f"SELECT COUNT(*) FROM {CATALOG}.{schema}.{table} WHERE org_name = '{TEST_ORG}'"

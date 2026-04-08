@@ -35,18 +35,21 @@ def run(path):
 # 1. core — enterprise copilot metrics (enterprise_id=999999)
 run("core/insert.py")
 
-# 2. direct — GitHub + Jira data (org=demo-acme-direct)
-#    Must run before dora/ (dora CTFC chart depends on mt_itsm_issues_hist)
+# 2. direct — copilot data (org=demo-acme-direct): direct_data, seats, billing, ai metrics
 run("direct/insert.py")
 
-# 3. dora — pipeline events, sdm tables, filter config
-#    Depends on direct/'s mt_itsm_issues_hist
+# 3. devex — devex data (org=demo-acme-direct): pull_requests, commits, teams, itsm + devex filter group
+#    Must run before dora/ (CTFC depends on mt_itsm_issues_hist seeded here)
+run("devex/insert.py")
+
+# 4. dora — pipeline events, sdm tables, DORA/CTFC filter config
+#    Depends on devex/'s mt_itsm_issues_hist
 run("dora/insert.py")
 
-# 4. release_mgmt — release management (fix_version LIKE 'demo-%')
+# 5. release_mgmt — release management (fix_version LIKE 'demo-%')
 run("release_mgmt/insert.py")
 
-# 5. snaplogic — SnapLogic integration data (org=demo-acme-direct)
+# 6. snaplogic — SnapLogic integration data (org=demo-acme-direct)
 run("snaplogic/insert.py")
 
 print("\n" + "="*60)

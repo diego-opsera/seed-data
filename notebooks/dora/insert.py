@@ -50,26 +50,6 @@ LTFC_KPI = "a9337c02-a00e-40ad-9cdc-2d18dfd771c9"
 CFR_KPI  = "ab9a59ba-a19c-4358-b195-1648797f77c2"
 MTTR_KPI = "906f4f2b-a299-4b24-9a24-2330f45dd493"
 
-# DevEx — github-based charts (filter on project_url)
-DEVEX_GITHUB_KPIS = [
-    "adca3119-2b97-4163-831d-ce0f3d150c2f",  # developer_throughput_summary_overview
-    "33eddd8c-6d0a-415a-be68-bb884ca33ca0",  # commit_statistics_overview (commit_to_pr_flow)
-    "dff33190-627a-4b1f-b2e7-fb95a4ebbe00",  # pr_size_area_chart
-    "0919c241-9149-494a-8294-8dd4c25ab540",  # pr_size_table_data
-    "d049ecd3-3f70-428f-a944-c84bda1fda10",  # pr_size_overview
-    "6ddb4873-9bb9-4776-84e0-c74b64cc9fc2",  # pr_size_area_chart (v2)
-    "3d7ec1a2-6f0b-4cc2-91ef-ad0f074cccfe",  # pr_size_tab_data_points
-]
-DEVEX_GITHUB_KPIS_SQL = ", ".join(f"'{k}'" for k in DEVEX_GITHUB_KPIS)
-
-# DevEx — jira-based charts (filter on project_name + issue_status + include_issue_types)
-DEVEX_JIRA_KPIS = [
-    "98c8b001-d968-4083-b2bb-e683c4176fb9",  # feature_delivery_rate
-    "317d4bd5-a16d-45ba-92ff-f7632d5ae629",  # story_completion_progress_overview
-    "d8be0a56-b6b8-44d0-9771-e42413e752fe",  # issue_completion_progress_overview
-]
-DEVEX_JIRA_KPIS_SQL = ", ".join(f"'{k}'" for k in DEVEX_JIRA_KPIS)
-
 CTFC_KPIS = [
     "f60d8a58-7c8d-4dd6-9b54-6c07715ae5ec",  # ctfc_custom_overview
     "7f0d028a-06fd-4c1d-8915-3f94c53899e2",  # ctfc_custom_sine_wave
@@ -139,20 +119,7 @@ _fvu(FILTER_GROUP_ID, 'jira', 'include_issue_types', ['Story', 'story', 'Bug', '
 _fvu(FILTER_GROUP_ID, 'jira', 'board_ids',           ['1'],                                               CTFC_KPIS_SQL, 7)
 _fvu(FILTER_GROUP_ID, 'jira', 'defect_type',         ['Bug', 'bug'],                                      CTFC_KPIS_SQL, 8)
 print("filter_values_unity: CTFC filters inserted")
-
-# DevEx: github charts — project_url covers all three demo-acme-direct repos
-_fvu(FILTER_GROUP_ID, 'github', 'project_url',
-     ['https://github.com/demo-acme-direct/backend',
-      'https://github.com/demo-acme-direct/frontend',
-      'https://github.com/demo-acme-direct/api-gateway'],
-     DEVEX_GITHUB_KPIS_SQL, 9)
-print("filter_values_unity: DevEx github filters inserted")
-
-# DevEx: jira charts — project_name + completion status + issue types
-_fvu(FILTER_GROUP_ID, 'jira', 'project_name',        ['ACME'],                                          DEVEX_JIRA_KPIS_SQL, 10)
-_fvu(FILTER_GROUP_ID, 'jira', 'issue_status',        ['Done', 'done', 'Completed'],                     DEVEX_JIRA_KPIS_SQL, 11)
-_fvu(FILTER_GROUP_ID, 'jira', 'include_issue_types', ['Story', 'story', 'Bug', 'bug', 'Task', 'task'],  DEVEX_JIRA_KPIS_SQL, 12)
-print("filter_values_unity: DevEx jira filters inserted")
+# DevEx filter rows are handled by notebooks/devex/insert.py
 
 # jira_boards: board_id=1 required by CTFC chart join (raw_jira_boards_ci underlies jira_boards view)
 spark.sql(f"""

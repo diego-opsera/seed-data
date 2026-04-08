@@ -23,10 +23,13 @@ run("release_mgmt/delete.py")
 # 3. dora
 run("dora/delete.py")
 
-# 4. direct
+# 4. devex — must delete before direct/ (no hard dependency, but mirrors insert order)
+run("devex/delete.py")
+
+# 5. direct
 run("direct/delete.py")
 
-# 5. core
+# 6. core
 run("core/delete.py")
 
 print("\n" + "="*60)
