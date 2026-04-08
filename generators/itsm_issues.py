@@ -160,10 +160,13 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                 )[0]
 
             resolution_name = "Done" if status == "done" else None
-            created_offset = rng.randint(0, 3)
+            sprint_duration = (sprint_end - sprint_start).days
+            created_offset = rng.randint(0, min(3, sprint_duration))
             created_dt = sprint_start + timedelta(days=created_offset)
             if status == "done":
-                updated_dt  = sprint_end - timedelta(days=rng.randint(0, 2))
+                # resolved must not precede created — clamp back-offset to remaining days
+                max_back = max(0, min(2, (sprint_end - created_dt).days))
+                updated_dt  = sprint_end - timedelta(days=rng.randint(0, max_back))
                 resolved_dt = updated_dt
             else:
                 updated_dt  = sprint_end
