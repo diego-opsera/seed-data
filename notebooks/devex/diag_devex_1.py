@@ -42,7 +42,7 @@ out("pr.date_range", rows(f"""
 out("pr.sample_key_fields", rows(f"""
     SELECT project_url, merge_request_url, pr_source, pr_state,
            pr_created_datetime, pr_merged_datetime,
-           first_pr_review_submitted_datetime, pr_approved_timestamp,
+           first_pr_review_submitted_datetime, first_pr_approved_timestamp,
            pr_user_id, first_commit_id,
            lines_added, lines_removed,
            fix_versions, board_ids
