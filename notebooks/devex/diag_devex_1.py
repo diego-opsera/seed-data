@@ -146,14 +146,22 @@ IH = f"{CATALOG}.base_datasets.v_itsm_issues_hist"
 
 out("itsm_hist.schema", schema(IH))
 
+# First check all distinct projects so we know what name to filter on
+out("itsm_hist.all_distinct_projects", rows(f"""
+    SELECT issue_project, itsm_source, COUNT(*) AS n FROM {IH}
+    GROUP BY issue_project, itsm_source ORDER BY n DESC
+""", 20))
+
+DEMO_PROJECTS = "('ACME', 'Acme Platform', 'acme', 'acme platform')"
+
 out("itsm_hist.count_demo", count(f"""
     SELECT COUNT(*) FROM {IH}
-    WHERE lower(issue_project) IN ('acme', 'acme platform') OR org_name = '{ORG}'
+    WHERE lower(issue_project) IN ('acme', 'acme platform')
 """))
 
-out("itsm_hist.distinct_projects", rows(f"""
+out("itsm_hist.distinct_projects_demo", rows(f"""
     SELECT issue_project, COUNT(*) AS n FROM {IH}
-    WHERE org_name = '{ORG}'
+    WHERE lower(issue_project) IN ('acme', 'acme platform')
     GROUP BY issue_project ORDER BY n DESC
 """, 10))
 
@@ -161,7 +169,7 @@ out("itsm_hist.sprint_sample", rows(f"""
     SELECT issue_project, sprint_name, sprint_state, sprint_complete_date,
            issue_key, issue_type, issue_status, issue_priority
     FROM {IH}
-    WHERE org_name = '{ORG}'
+    WHERE lower(issue_project) IN ('acme', 'acme platform')
     AND sprint_name IS NOT NULL
     AND itsm_source = 'jira'
     ORDER BY sprint_complete_date DESC
@@ -169,7 +177,8 @@ out("itsm_hist.sprint_sample", rows(f"""
 
 out("itsm_hist.sprint_state_breakdown", rows(f"""
     SELECT sprint_state, COUNT(*) AS n FROM {IH}
-    WHERE org_name = '{ORG}' AND sprint_name IS NOT NULL
+    WHERE lower(issue_project) IN ('acme', 'acme platform')
+    AND sprint_name IS NOT NULL
     GROUP BY sprint_state
 """, 10))
 
