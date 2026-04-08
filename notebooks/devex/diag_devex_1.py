@@ -55,7 +55,7 @@ out("pr.pr_commits_sample", rows(f"""
     SELECT merge_request_url,
            SIZE(pr_commits) AS commits_count,
            pr_commits[0].commit_timestamp AS first_commit_ts,
-           pr_commits[0].commit_id       AS first_commit_id_in_array
+           pr_commits[0].sha             AS first_commit_sha_in_array
     FROM {PR} WHERE org_name = '{ORG}' AND pr_commits IS NOT NULL
     ORDER BY pr_created_datetime DESC
 """, 5))
