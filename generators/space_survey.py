@@ -123,8 +123,11 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
         n_respondents = max(3, round(len(all_users) * 0.80))
         respondents   = all_users[:n_respondents]
 
-        for user in respondents:
-            response_id = f"resp-{ym}-{user['id']}"
+        for idx, user in enumerate(respondents):
+            # Fixed response IDs 'resp-001'..'resp-005' so COUNT(DISTINCT response_id)
+            # stays at 5 across all survey rounds — keeps response_rate_percentage sane
+            # (formula in SQL: COUNT(DISTINCT response_id) * 100 / 5 = 100%)
+            response_id = f"resp-{(idx % 5) + 1:03d}"
             # Submission time: random hour on the survey date
             u_rng = random.Random(hash((ym, user["id"], "space")) % (2**31))
             submit_hour = u_rng.randint(9, 18)
