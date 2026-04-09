@@ -21,19 +21,18 @@ def out(label, data):
     print(f"\n### {label}")
     print(json.dumps(data, default=str, indent=2))
 
-# 1. DESCRIBE the flattened view to find actual column names
+# 1. DESCRIBE the flattened view to find actual column names and types
 out("fgvf.schema", {r["col_name"]: r["data_type"]
     for r in spark.sql(f"DESCRIBE {FGVF}").collect()
     if r["col_name"] and not r["col_name"].startswith("#")})
 
-# 2. Confirm commit_stats UUID is in filter_values_unity
+# 2. FVU: kpi_uuids is ARRAY<STRING> — use ARRAY_CONTAINS
 out("fvu.commit_stats_uuid_present", rows(f"""
     SELECT filter_group_id, tool_type, filter_name, filter_values,
-           SIZE(kpi_uuids) AS kpi_count, created_by,
-           kpi_uuids = '{COMMIT_STATS_UUID}' AS has_commit_stats_uuid
+           SIZE(kpi_uuids) AS kpi_count, created_by
     FROM {FVU}
     WHERE created_by = 'seed-data@devex.io'
-      AND kpi_uuids = '{COMMIT_STATS_UUID}'
+      AND ARRAY_CONTAINS(kpi_uuids, '{COMMIT_STATS_UUID}')
 """))
 
 # 3. Sample commits — do they have .git URLs?
@@ -44,7 +43,7 @@ out("commits.sample_project_urls", rows(f"""
     GROUP BY project_url
 """))
 
-# 4. Simulate filter using ARRAY_CONTAINS(kpi_uuids, ...) instead of kpi_uuid
+# 4. FGVF: kpi_uuids is STRING (view already exploded) — use =
 out("fgvf.exploded_urls_for_commit_stats", rows(f"""
     SELECT DISTINCT exploded_project_url AS project_url
     FROM {FGVF}
