@@ -21,7 +21,12 @@ def out(label, data):
     print(f"\n### {label}")
     print(json.dumps(data, default=str, indent=2))
 
-# 1. Confirm commit_stats UUID is in filter_values_unity
+# 1. DESCRIBE the flattened view to find actual column names
+out("fgvf.schema", {r["col_name"]: r["data_type"]
+    for r in spark.sql(f"DESCRIBE {FGVF}").collect()
+    if r["col_name"] and not r["col_name"].startswith("#")})
+
+# 2. Confirm commit_stats UUID is in filter_values_unity
 out("fvu.commit_stats_uuid_present", rows(f"""
     SELECT filter_group_id, tool_type, filter_name, filter_values,
            SIZE(kpi_uuids) AS kpi_count, created_by,
@@ -29,15 +34,6 @@ out("fvu.commit_stats_uuid_present", rows(f"""
     FROM {FVU}
     WHERE created_by = 'seed-data@devex.io'
       AND ARRAY_CONTAINS(kpi_uuids, '{COMMIT_STATS_UUID}')
-"""))
-
-# 2. What does the flattened view return for commit_stats UUID?
-out("fgvf.commit_stats_rows", rows(f"""
-    SELECT level_1, level_3, kpi_uuid, project_url
-    FROM {FGVF}
-    WHERE kpi_uuid = '{COMMIT_STATS_UUID}'
-      AND level_1 = 'Acme Corp'
-    LIMIT 10
 """))
 
 # 3. Sample commits — do they have .git URLs?
@@ -48,12 +44,12 @@ out("commits.sample_project_urls", rows(f"""
     GROUP BY project_url
 """))
 
-# 4. Simulate the filter CTE for commit_stats (level_1='Acme Corp', level_3='demo-acme-corp')
+# 4. Simulate filter using ARRAY_CONTAINS(kpi_uuids, ...) instead of kpi_uuid
 out("fgvf.exploded_urls_for_commit_stats", rows(f"""
     SELECT DISTINCT exploded_project_url AS project_url
     FROM {FGVF}
     LATERAL VIEW explode_outer(project_url) AS exploded_project_url
-    WHERE kpi_uuid = '{COMMIT_STATS_UUID}'
+    WHERE ARRAY_CONTAINS(kpi_uuids, '{COMMIT_STATS_UUID}')
       AND level_1 = 'Acme Corp' AND level_3 = 'demo-acme-corp'
       AND exploded_project_url IS NOT NULL
 """))
@@ -64,7 +60,7 @@ out("commits.join_to_commit_stats_filter", rows(f"""
         SELECT DISTINCT exploded_project_url AS project_url
         FROM {FGVF}
         LATERAL VIEW explode_outer(project_url) AS exploded_project_url
-        WHERE kpi_uuid = '{COMMIT_STATS_UUID}'
+        WHERE ARRAY_CONTAINS(kpi_uuids, '{COMMIT_STATS_UUID}')
           AND level_1 = 'Acme Corp' AND level_3 = 'demo-acme-corp'
           AND exploded_project_url IS NOT NULL
     )
@@ -82,18 +78,17 @@ out("commits.before_sha_size_check", rows(f"""
     GROUP BY sha_size
 """))
 
-# 7. Simulate commit_statistics_overview query (simplified)
-out("commit_stats.simulate_overview", rows(f"""
+# 7. Simulate commit_statistics_overview query (simplified, >= 1 operator)
+out("commit_stats.simulate_overview_ge1", rows(f"""
     WITH filter AS (
         SELECT DISTINCT exploded_project_url AS project_url
         FROM {FGVF}
         LATERAL VIEW explode_outer(project_url) AS exploded_project_url
-        WHERE kpi_uuid = '{COMMIT_STATS_UUID}'
+        WHERE ARRAY_CONTAINS(kpi_uuids, '{COMMIT_STATS_UUID}')
           AND level_1 = 'Acme Corp' AND level_3 = 'demo-acme-corp'
           AND exploded_project_url IS NOT NULL
     )
     SELECT COUNT(DISTINCT c.commit_id) AS commit_count
     FROM {CM} c INNER JOIN filter f ON c.project_url = f.project_url
-    WHERE c.org_name = '{ORG}'
-      AND SIZE(SPLIT(c.before_sha, ',')) >= 1
+    WHERE SIZE(SPLIT(c.before_sha, ',')) >= 1
 """))

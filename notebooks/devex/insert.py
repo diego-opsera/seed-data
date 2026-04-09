@@ -8,7 +8,7 @@ sys.path.insert(0, "/tmp/seed-data")
 os.chdir("/tmp/seed-data")
 
 import yaml
-from generators import pull_requests, commits, github_teams_members, itsm_issues
+from generators import pull_requests, commits, github_teams_members, itsm_issues, servicenow_change_requests
 
 CATALOG = "playground_prod"
 
@@ -23,10 +23,11 @@ entities_direct = {**entities, "orgs": [entities["orgs"][1]]}
 
 # ── Part 1: base table data ───────────────────────────────────────────────────
 statements = []
-statements += [(pull_requests.TABLE,        s) for s in pull_requests.generate(CATALOG, entities_direct, story)]
-statements += [(commits.TABLE,              s) for s in commits.generate(CATALOG, entities_direct, story)]
-statements += [(github_teams_members.TABLE, s) for s in github_teams_members.generate(CATALOG, entities_direct, story)]
-statements += [(itsm_issues.TABLE,          s) for s in itsm_issues.generate(CATALOG, entities_direct, story)]
+statements += [(pull_requests.TABLE,                  s) for s in pull_requests.generate(CATALOG, entities_direct, story)]
+statements += [(commits.TABLE,                        s) for s in commits.generate(CATALOG, entities_direct, story)]
+statements += [(github_teams_members.TABLE,           s) for s in github_teams_members.generate(CATALOG, entities_direct, story)]
+statements += [(itsm_issues.TABLE,                    s) for s in itsm_issues.generate(CATALOG, entities_direct, story)]
+statements += [(servicenow_change_requests.TABLE,     s) for s in servicenow_change_requests.generate(CATALOG, entities_direct, story)]
 
 for i, (table, sql) in enumerate(statements, 1):
     print(f"[{i}/{len(statements)}] {table}...", end=" ")
@@ -79,6 +80,15 @@ PIPELINE_STATS_KPIS = [
 ]
 PIPELINE_STATS_KPIS_SQL = ", ".join(f"'{k}'" for k in PIPELINE_STATS_KPIS)
 
+CHANGE_REQUEST_KPIS = [
+    "4791045c-5bb4-4745-8c2f-d68e5783da0a",  # change_request_overview
+    "f3f7946a-3153-419f-9ce8-ab8117cdc395",  # change_request_chart_data (sine)
+    "255e537f-7572-461b-be48-b46ead7e5d70",  # change_request_summary_block
+    "ec56bcb4-86ca-413c-bb57-bb229483658a",  # change_request_table_data
+    "fc56bcb4-86ca-413c-bb57-bb229483658a",  # change_request_filters_data
+]
+CHANGE_REQUEST_KPIS_SQL = ", ".join(f"'{k}'" for k in CHANGE_REQUEST_KPIS)
+
 DEVEX_JIRA_KPIS = [
     "98c8b001-d968-4083-b2bb-e683c4176fb9",  # feature_delivery_rate
     "317d4bd5-a16d-45ba-92ff-f7632d5ae629",  # story_completion_progress_overview
@@ -121,6 +131,12 @@ _fvu(FILTER_GROUP_ID, 'github', 'project_url',
      ['https://github.com/demo-acme/project_001.git'],
      PIPELINE_STATS_KPIS_SQL, 5)
 print("filter_values_unity: Pipeline stats filters inserted")
+
+# Change Request: assignment_groups matches trf_servicenow_change_requests.issue_project
+_fvu(FILTER_GROUP_ID, 'servicenow', 'assignment_groups',
+     ['ACME IT Operations'],
+     CHANGE_REQUEST_KPIS_SQL, 6)
+print("filter_values_unity: Change Request filters inserted")
 
 # Jira-based devex charts: filter by project_name + completion criteria
 _fvu(FILTER_GROUP_ID, 'jira', 'project_name',        ['ACME'],                                         DEVEX_JIRA_KPIS_SQL, 1)
