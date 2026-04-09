@@ -41,9 +41,9 @@ out("filter_values_unity.all_seed_rows", rows(f"""
 # ── 3. What does the flattened view return for seed data? ─────────────────────
 out("fgvf.all_seed_rows", rows(f"""
     SELECT id, level_1, level_3, project_url, project_name,
-           team_names, board_ids, issue_status, include_issue_types, created_by
+           team_names, board_ids, issue_status, include_issue_types
     FROM {FGVF}
-    WHERE created_by IN ('seed-data@demo.io', 'seed-data@devex.io')
+    WHERE lower(concat_ws(' ', level_1, level_2, level_3)) RLIKE 'acme|demo'
     LIMIT 20
 """))
 
@@ -51,14 +51,14 @@ out("fgvf.all_seed_rows", rows(f"""
 # The dashboard is filtered on level_1='Acme Corp', level_3='demo-acme-corp'
 out("fgvf.simulate_whereClause_by_level", rows(f"""
     SELECT project_url, project_name, team_names, board_ids,
-           issue_status, include_issue_types, created_by
+           issue_status, include_issue_types
     FROM {FGVF}
     WHERE level_1 = 'Acme Corp' AND level_3 = 'demo-acme-corp'
 """))
 
 # ── 5. Does the filter CTE produce project_url rows? ─────────────────────────
 out("fgvf.exploded_project_urls_for_devex", rows(f"""
-    SELECT DISTINCT exploded_project_url AS project_url, created_by
+    SELECT DISTINCT exploded_project_url AS project_url
     FROM {FGVF}
     LATERAL VIEW explode_outer(project_url) AS exploded_project_url
     WHERE level_1 = 'Acme Corp' AND level_3 = 'demo-acme-corp'
