@@ -52,14 +52,32 @@ print(f"Using existing DORA filter_group_id: {FILTER_GROUP_ID}")
 
 DEVEX_GITHUB_KPIS = [
     "adca3119-2b97-4163-831d-ce0f3d150c2f",  # developer_throughput_summary_overview
-    "33eddd8c-6d0a-415a-be68-bb884ca33ca0",  # commit_statistics_overview (commit_to_pr_flow)
+    # commit_statistics
+    "9fd5ec78-9fce-49a0-8154-24d3109d3f05",  # commit_statistics_overview
+    "af43b1eb-4da0-4197-85fd-d19e146c71a1",  # commit_statistics_sine_wave
+    "bd75f3d3-4058-47e0-9d9c-d1864309e166",  # commit_statistics_tab_data_points
+    "16d4847d-6dd9-443b-838f-420571223228",  # commit_statistics_table_data
+    "33eddd8c-6d0a-415a-be68-bb884ca33ca0",  # commit_to_pr_flow (commit_activity_overview)
+    # pr_size
     "dff33190-627a-4b1f-b2e7-fb95a4ebbe00",  # pr_size_area_chart
     "0919c241-9149-494a-8294-8dd4c25ab540",  # pr_size_table_data
     "d049ecd3-3f70-428f-a944-c84bda1fda10",  # pr_size_overview
     "6ddb4873-9bb9-4776-84e0-c74b64cc9fc2",  # pr_size_area_chart (v2)
     "3d7ec1a2-6f0b-4cc2-91ef-ad0f074cccfe",  # pr_size_tab_data_points
+    # pull_request_statistics
+    "62caa741-e5ed-4e7a-8698-cbd7d8a2e042",  # pull_request_statistics_overview
+    "9637286b-a5c2-4428-ac3b-9c207b8ad722",  # pull_request_statistics_sine_wave
+    "745c5458-56a1-40b1-85b1-81e3fc86d119",  # pull_request_statistics_tab_data
+    "fa10f775-0a32-44e4-bab4-c986a70bc563",  # pull_request_statistics_table_data
 ]
 DEVEX_GITHUB_KPIS_SQL = ", ".join(f"'{k}'" for k in DEVEX_GITHUB_KPIS)
+
+PIPELINE_STATS_KPIS = [
+    "dd3f5cd3-d70d-474c-abb0-f97bf2797e46",  # pipeline_statistics_overview
+    "df1f985e-230e-4375-a027-ad3a50827941",  # pipeline_statistics_sine_wave
+    "430aa77e-46a8-472f-9fda-18b27a5ee1b9",  # pipeline_statistics_stage_summary
+]
+PIPELINE_STATS_KPIS_SQL = ", ".join(f"'{k}'" for k in PIPELINE_STATS_KPIS)
 
 DEVEX_JIRA_KPIS = [
     "98c8b001-d968-4083-b2bb-e683c4176fb9",  # feature_delivery_rate
@@ -89,13 +107,20 @@ def _fvu(filter_group_id, tool_type, filter_name, filter_values, kpi_uuids_sql, 
     """)
 
 
-# GitHub-based devex charts: filter by project_url
+# GitHub-based devex charts: filter by project_url (commits, PRs, PR size, commit stats)
 _fvu(FILTER_GROUP_ID, 'github', 'project_url',
      ['https://github.com/demo-acme-direct/backend',
       'https://github.com/demo-acme-direct/frontend',
       'https://github.com/demo-acme-direct/api-gateway'],
      DEVEX_GITHUB_KPIS_SQL, 0)
 print("filter_values_unity: DevEx github filters inserted")
+
+# Pipeline statistics: points to the DORA pipeline_activities project_url
+# (pipeline_activities is seeded by dora/ using https://github.com/demo-acme/project_001.git)
+_fvu(FILTER_GROUP_ID, 'github', 'project_url',
+     ['https://github.com/demo-acme/project_001.git'],
+     PIPELINE_STATS_KPIS_SQL, 5)
+print("filter_values_unity: Pipeline stats filters inserted")
 
 # Jira-based devex charts: filter by project_name + completion criteria
 _fvu(FILTER_GROUP_ID, 'jira', 'project_name',        ['ACME'],                                         DEVEX_JIRA_KPIS_SQL, 1)

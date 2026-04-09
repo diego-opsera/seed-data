@@ -36,7 +36,8 @@ INSERT INTO {catalog}.base_datasets.pull_requests
    pr_commits,
    source_branch, target_branch,
    lines_added, lines_removed,
-   pr_source, object_kind)
+   pr_source, object_kind,
+   latest_pr_review_state, first_pr_approved_timestamp)
 VALUES
 {values};"""
 
@@ -195,6 +196,14 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                 closed_ts_sql  = f"TIMESTAMP '{closed_ts}'" if closed_ts  else "NULL"
                 closed_d_sql   = f"DATE '{merge_date.isoformat()}'" if closed_ts else "NULL"
 
+                # Review state and approval timestamp
+                if pr_state == "closed" and merge_status:
+                    review_state_sql = "'APPROVED'"
+                    approved_ts_sql  = merged_ts_sql
+                else:
+                    review_state_sql = "'OPEN'"
+                    approved_ts_sql  = "NULL"
+
                 value_lines.append(
                     f"  ({_sql_val(org_name)}, {_sql_val(repo_name)}, {_sql_val(repo_url)}, "
                     f"{_sql_val(user['login'])}, {_sql_val(user['login'])}, "
@@ -209,7 +218,8 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                     f"{commits_sql}, "
                     f"'feature/{user['login']}-patch', 'main', "
                     f"{_sql_val(lines_add)}, {_sql_val(lines_rem)}, "
-                    f"'github', 'pull_request')"
+                    f"'github', 'pull_request', "
+                    f"{review_state_sql}, {approved_ts_sql})"
                 )
 
     # Batch into chunks to avoid single enormous SQL statements
