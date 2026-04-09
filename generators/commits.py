@@ -16,7 +16,7 @@ INSERT_SQL = """\
 INSERT INTO {catalog}.base_datasets.{table}
   (commit_id, commit_date, commit_timestamp, org_name, project_name, project_url,
    cleansed_user_name, cleansed_commit_author, user_id, copilot_commit_flag,
-   lines_added, lines_removed, before_sha, has_ticket_id, file_extension)
+   lines_added, lines_removed, before_sha, has_ticket_id, file_extension, web_url)
 VALUES
 {values};"""
 
@@ -100,6 +100,9 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                 file_ext_sql = f"ARRAY({', '.join(file_structs)})"
 
                 has_ticket = 1 if c_rng.random() < 0.38 else 0
+                # web_url needed for COUNT(DISTINCT commit_id, web_url) in commit_statistics SQL
+                repo_base = project_url.replace(".git", "")
+                web_url   = f"{repo_base}/commit/{commit_id}"
 
                 value_lines.append(
                     f"  ({_sql_val(commit_id)}, {_sql_val(d)}, "
@@ -108,7 +111,7 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                     f"{_sql_val(user['login'])}, {_sql_val(user['login'])}, "
                     f"{user['id']}, {_sql_val(copilot_flag)}, "
                     f"{lines_added}, {lines_removed}, "
-                    f"{_sql_val(before_sha)}, {has_ticket}, {file_ext_sql})"
+                    f"{_sql_val(before_sha)}, {has_ticket}, {file_ext_sql}, {_sql_val(web_url)})"
                 )
 
     return [INSERT_SQL.format(catalog=catalog, table=TABLE, values=",\n".join(value_lines))]
