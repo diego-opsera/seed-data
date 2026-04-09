@@ -65,14 +65,14 @@ _DIM_MAP = {
 _FILTERS_SQL = (
     "NAMED_STRUCT("
     "'level_1', ARRAY('Acme Corp'), "
-    "'level_2', CAST(NULL AS ARRAY<STRING>), "
+    "'level_2', NULL, "
     "'level_3', ARRAY('demo-acme-corp'), "
-    "'level_4', CAST(NULL AS ARRAY<STRING>), "
-    "'level_5', CAST(NULL AS ARRAY<STRING>), "
-    "'svp', CAST(NULL AS ARRAY<STRING>), "
-    "'vp', CAST(NULL AS ARRAY<STRING>), "
-    "'director', CAST(NULL AS ARRAY<STRING>), "
-    "'supervisor', CAST(NULL AS ARRAY<STRING>)"
+    "'level_4', NULL, "
+    "'level_5', NULL, "
+    "'svp', NULL, "
+    "'vp', NULL, "
+    "'director', NULL, "
+    "'supervisor', NULL"
     ")"
 )
 
