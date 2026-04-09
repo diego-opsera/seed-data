@@ -20,6 +20,16 @@ n = spark.sql(
 ).collect()[0][0]
 print(f"Deleted {n} rows from source_to_stage.raw_github_teams_members")
 
+# survey_details_with_responses (SPACE metrics)
+try:
+    n = spark.sql(
+        f"DELETE FROM {CATALOG}.source_to_stage.survey_details_with_responses "
+        f"WHERE survey_id LIKE 'demo-seed-space-%'"
+    ).collect()[0][0]
+    print(f"Deleted {n} rows from source_to_stage.survey_details_with_responses")
+except Exception as e:
+    print(f"survey_details_with_responses: skipped ({e})")
+
 # servicenow change requests: scoped to seeded IDs (table may not exist on first run)
 try:
     n = spark.sql(
@@ -82,3 +92,8 @@ n = spark.sql(f"SELECT COUNT(*) FROM {CATALOG}.master_data.filter_groups_unity W
 print(f"  filter_groups_unity (devex): {n}")
 n = spark.sql(f"SELECT COUNT(*) FROM {CATALOG}.master_data.filter_values_unity WHERE created_by = 'seed-data@devex.io'").collect()[0][0]
 print(f"  filter_values_unity (devex): {n}")
+try:
+    n = spark.sql(f"SELECT COUNT(*) FROM {CATALOG}.source_to_stage.survey_details_with_responses WHERE survey_id LIKE 'demo-seed-space-%'").collect()[0][0]
+    print(f"  survey_details_with_responses (demo-seed-space-*): {n}")
+except Exception:
+    print(f"  survey_details_with_responses: table not accessible")

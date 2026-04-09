@@ -8,7 +8,7 @@ sys.path.insert(0, "/tmp/seed-data")
 os.chdir("/tmp/seed-data")
 
 import yaml
-from generators import pull_requests, commits, github_teams_members, itsm_issues, servicenow_change_requests
+from generators import pull_requests, commits, github_teams_members, itsm_issues, servicenow_change_requests, space_survey
 
 CATALOG = "playground_prod"
 
@@ -53,6 +53,7 @@ statements += [(commits.TABLE,                        s) for s in commits.genera
 statements += [(github_teams_members.TABLE,           s) for s in github_teams_members.generate(CATALOG, entities_direct, story)]
 statements += [(itsm_issues.TABLE,                    s) for s in itsm_issues.generate(CATALOG, entities_direct, story)]
 statements += [(servicenow_change_requests.TABLE,     s) for s in servicenow_change_requests.generate(CATALOG, entities_direct, story)]
+statements += [(space_survey.TABLE,                   s) for s in space_survey.generate(CATALOG, entities_direct, story)]
 
 for i, (table, sql) in enumerate(statements, 1):
     print(f"[{i}/{len(statements)}] {table}...", end=" ")
@@ -121,6 +122,17 @@ DEVEX_JIRA_KPIS = [
 ]
 DEVEX_JIRA_KPIS_SQL = ", ".join(f"'{k}'" for k in DEVEX_JIRA_KPIS)
 
+# SPACE KPIs that join commits/PRs via {{whereClause}} — need project_url in filter_values_unity
+SPACE_GITHUB_KPIS = [
+    "space_c3d4e5f6-g7h8-9012-cdef-345678901234",  # space_devex_metrics
+    "space_d4e5f6g7-h8i9-0123-defg-456789012345",  # commits_vs_space
+    "space_e5f6g7h8-i9j0-1234-efgh-567890123456",  # pr_size_vs_performance
+    "space_f6g7h8i9-j0k1-2345-fghi-678901234567",  # space_pr_metrics
+    "space_g7h8i9j0-k1l2-3456-ghij-789012345678",  # space_activity_patterns
+    "space_h8i9j0k1-l2m3-4567-hijk-890123456789",  # space_commit_patterns
+]
+SPACE_GITHUB_KPIS_SQL = ", ".join(f"'{k}'" for k in SPACE_GITHUB_KPIS)
+
 
 def _fvu(filter_group_id, tool_type, filter_name, filter_values, kpi_uuids_sql, sort_number):
     _id = str(uuid.uuid4())
@@ -168,3 +180,12 @@ _fvu(FILTER_GROUP_ID, 'jira', 'project_name',        ['ACME'],                  
 _fvu(FILTER_GROUP_ID, 'jira', 'issue_status',        ['Done', 'done', 'Completed'],                    DEVEX_JIRA_KPIS_SQL, 2)
 _fvu(FILTER_GROUP_ID, 'jira', 'include_issue_types', ['Story', 'story', 'Bug', 'bug', 'Task', 'task'], DEVEX_JIRA_KPIS_SQL, 3)
 print("filter_values_unity: DevEx jira filters inserted")
+
+# SPACE charts that join GitHub data via {{whereClause}}: needs project_url in filter_values_unity
+# space_overview and space_dimension_metrics use only {{spaceDashboardFilterClause}} — no entry needed
+_fvu(FILTER_GROUP_ID, 'github', 'project_url',
+     ['https://github.com/demo-acme-direct/backend',
+      'https://github.com/demo-acme-direct/frontend',
+      'https://github.com/demo-acme-direct/api-gateway'],
+     SPACE_GITHUB_KPIS_SQL, 7)
+print("filter_values_unity: SPACE github filters inserted")
