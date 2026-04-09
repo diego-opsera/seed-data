@@ -14,6 +14,40 @@ from typing import Any
 # US holidays 2025-2026 (major federal + commonly observed)
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# March 18 2026 production incident
+# Suppression window: feature throughput tanks while devs firefight
+# Hotfix window: surge of emergency commits/PRs after stabilization
+# ---------------------------------------------------------------------------
+
+_INCIDENT_SUPPRESSED = frozenset({
+    date(2026, 3, 16), date(2026, 3, 17), date(2026, 3, 18),
+    date(2026, 3, 19), date(2026, 3, 20),
+})
+_INCIDENT_HOTFIX = frozenset({
+    date(2026, 3, 23), date(2026, 3, 24), date(2026, 3, 25),
+})
+
+
+def incident_multiplier(d: date) -> float:
+    """Activity multiplier for the March 18 2026 production incident.
+    Incident week: 20% of normal throughput (devs in war-room, not shipping).
+    Recovery week: 145% as hotfixes and catch-up work surge."""
+    if d in _INCIDENT_SUPPRESSED:
+        return 0.20
+    if d in _INCIDENT_HOTFIX:
+        return 1.45
+    return 1.0
+
+
+def is_incident_suppressed(d: date) -> bool:
+    return d in _INCIDENT_SUPPRESSED
+
+
+def is_incident_hotfix(d: date) -> bool:
+    return d in _INCIDENT_HOTFIX
+
+
 US_HOLIDAYS = frozenset({
     date(2025, 5, 26),   # Memorial Day
     date(2025, 7, 4),    # Independence Day

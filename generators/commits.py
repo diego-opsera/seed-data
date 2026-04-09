@@ -7,7 +7,8 @@ Drives: Commit Trend, Commit Overview.
 """
 import random
 from datetime import date
-from .utils import date_range, expand_users, active_user_count, lerp, _sql_val, split_across
+from .utils import date_range, expand_users, active_user_count, lerp, _sql_val, split_across, \
+    incident_multiplier, is_incident_suppressed, is_incident_hotfix
 
 
 TABLE = "commits_rest_api"
@@ -61,14 +62,30 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
         active_n = active_user_count(d, story, len(all_users))
         if active_n == 0:
             continue
+
+        # March 18 2026 incident: suppress or boost throughput
+        inc_mult = incident_multiplier(d)
+        if inc_mult != 1.0:
+            active_n = max(0, min(len(all_users), round(active_n * inc_mult)))
+        if active_n == 0:
+            continue
+
         t = max(0.0, min(1.0, (d - start).days / total_days))
         copilot_rate = lerp(_COPILOT_FLAG_RATE[0], _COPILOT_FLAG_RATE[1], t)
 
         for user in all_users[:active_n]:
             project_name, project_url = _TEAM_PROJECT.get(user["team"], _DEFAULT_PROJECT)
             day_rng = random.Random(hash((str(d), user["id"], "commits")) % (2 ** 31))
-            n_commits = day_rng.randint(2, 4)
+            # Incident week: 0-1 commits (firefighting). Hotfix week: 4-7.
+            if is_incident_suppressed(d):
+                n_commits = day_rng.randint(0, 1)
+            elif is_incident_hotfix(d):
+                n_commits = day_rng.randint(4, 7)
+            else:
+                n_commits = day_rng.randint(2, 4)
 
+            if n_commits == 0:
+                continue
             for seq in range(n_commits):
                 c_seed = hash((str(d), user["id"], seq)) % (2 ** 31)
                 c_rng  = random.Random(c_seed)

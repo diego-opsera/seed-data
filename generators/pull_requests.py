@@ -18,7 +18,8 @@ so existing rows from other orgs are never touched.
 """
 import random
 from datetime import date, datetime, timedelta
-from .utils import date_range, expand_users, active_user_count, lerp, _sql_val
+from .utils import date_range, expand_users, active_user_count, lerp, _sql_val, \
+    incident_multiplier, is_incident_suppressed, is_incident_hotfix
 
 TABLE = "pull_requests"
 
@@ -134,6 +135,15 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
         n_non_copilot = day_rng.randint(2, 4)
         n_copilot     = round(lerp(0.5, 4.0, t)) + day_rng.randint(0, 1)
 
+        # March 18 2026 incident: suppress new PRs during firefighting,
+        # boost during hotfix recovery week
+        if is_incident_suppressed(d):
+            n_non_copilot = max(0, round(n_non_copilot * 0.15))
+            n_copilot     = max(0, round(n_copilot     * 0.15))
+        elif is_incident_hotfix(d):
+            n_non_copilot = round(n_non_copilot * 1.5)
+            n_copilot     = round(n_copilot     * 1.5)
+
         for pr_type, n_prs in [("N", n_non_copilot), ("Y", n_copilot)]:
             for seq in range(n_prs):
                 rng = random.Random(
@@ -151,7 +161,13 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                 created_ts   = f"{d.isoformat()} {created_hour:02d}:00:00"
 
                 # Determine merge outcome
-                merge_window = _MERGE_DAYS_COPILOT if pr_type == "Y" else _MERGE_DAYS_NON_COPILOT
+                # Incident/hotfix PRs are emergency fixes — merge same-day or next day
+                if is_incident_suppressed(d) or is_incident_hotfix(d):
+                    merge_window = (0, 1)
+                elif pr_type == "Y":
+                    merge_window = _MERGE_DAYS_COPILOT
+                else:
+                    merge_window = _MERGE_DAYS_NON_COPILOT
                 days_to_merge = rng.randint(*merge_window)
                 merge_date    = d + timedelta(days=days_to_merge)
 

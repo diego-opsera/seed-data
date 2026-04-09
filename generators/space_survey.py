@@ -96,9 +96,17 @@ def _survey_months(start: date, end: date):
             y += 1
 
 
-def _answer(dim: str, t: float, rng: random.Random) -> int:
+# March 2026 incident dip: ~15-point score drop (0.6 answer-unit penalty)
+# Incident hit mid-March; end-of-month survey captures the negative sentiment
+_INCIDENT_SURVEY_MONTH = "2026-03"
+_INCIDENT_ANSWER_PENALTY = 0.6
+
+
+def _answer(dim: str, t: float, rng: random.Random, incident_month: bool = False) -> int:
     """Draw a 1–5 integer answer centred around the trending target for dimension dim."""
     target = lerp(_DIM_START[dim], _DIM_END[dim], t)
+    if incident_month:
+        target = max(1.0, target - _INCIDENT_ANSWER_PENALTY)
     # Gaussian noise ±0.7, then clamp and round
     raw = target + rng.gauss(0, 0.7)
     return max(1, min(5, round(raw)))
@@ -134,10 +142,11 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
             submit_min  = u_rng.randint(0, 59)
             submit_ts   = f"TIMESTAMP '{survey_date.isoformat()} {submit_hour:02d}:{submit_min:02d}:00'"
 
+            is_incident_month = (ym == _INCIDENT_SURVEY_MONTH)
             for q_id, q_text in _QUESTIONS:
                 dim  = _DIM_MAP[q_id]
                 q_rng = random.Random(hash((ym, user["id"], q_id)) % (2**31))
-                ans  = _answer(dim, t, q_rng)
+                ans  = _answer(dim, t, q_rng, incident_month=is_incident_month)
 
                 value_lines.append(
                     f"  ({_sql_val(survey_id)}, {_sql_val(survey_name)}, {_sql_val(description)}, "
