@@ -39,8 +39,12 @@ out("filter_values_unity.all_seed_rows", rows(f"""
 """))
 
 # ── 3. What does the flattened view return for seed data? ─────────────────────
+out("fgvf.schema", {r["col_name"]: r["data_type"]
+    for r in spark.sql(f"DESCRIBE {FGVF}").collect()
+    if r["col_name"] and not r["col_name"].startswith("#")})
+
 out("fgvf.all_seed_rows", rows(f"""
-    SELECT id, level_1, level_3, project_url, project_name,
+    SELECT level_1, level_2, level_3, project_url, project_name,
            team_names, board_ids, issue_status, include_issue_types
     FROM {FGVF}
     WHERE lower(concat_ws(' ', level_1, level_2, level_3)) RLIKE 'acme|demo'
