@@ -30,10 +30,10 @@ out("fgvf.schema", {r["col_name"]: r["data_type"]
 out("fvu.commit_stats_uuid_present", rows(f"""
     SELECT filter_group_id, tool_type, filter_name, filter_values,
            SIZE(kpi_uuids) AS kpi_count, created_by,
-           ARRAY_CONTAINS(kpi_uuids, '{COMMIT_STATS_UUID}') AS has_commit_stats_uuid
+           kpi_uuids = '{COMMIT_STATS_UUID}' AS has_commit_stats_uuid
     FROM {FVU}
     WHERE created_by = 'seed-data@devex.io'
-      AND ARRAY_CONTAINS(kpi_uuids, '{COMMIT_STATS_UUID}')
+      AND kpi_uuids = '{COMMIT_STATS_UUID}'
 """))
 
 # 3. Sample commits — do they have .git URLs?
@@ -49,7 +49,7 @@ out("fgvf.exploded_urls_for_commit_stats", rows(f"""
     SELECT DISTINCT exploded_project_url AS project_url
     FROM {FGVF}
     LATERAL VIEW explode_outer(project_url) AS exploded_project_url
-    WHERE ARRAY_CONTAINS(kpi_uuids, '{COMMIT_STATS_UUID}')
+    WHERE kpi_uuids = '{COMMIT_STATS_UUID}'
       AND level_1 = 'Acme Corp' AND level_3 = 'demo-acme-corp'
       AND exploded_project_url IS NOT NULL
 """))
@@ -60,7 +60,7 @@ out("commits.join_to_commit_stats_filter", rows(f"""
         SELECT DISTINCT exploded_project_url AS project_url
         FROM {FGVF}
         LATERAL VIEW explode_outer(project_url) AS exploded_project_url
-        WHERE ARRAY_CONTAINS(kpi_uuids, '{COMMIT_STATS_UUID}')
+        WHERE kpi_uuids = '{COMMIT_STATS_UUID}'
           AND level_1 = 'Acme Corp' AND level_3 = 'demo-acme-corp'
           AND exploded_project_url IS NOT NULL
     )
@@ -84,7 +84,7 @@ out("commit_stats.simulate_overview_ge1", rows(f"""
         SELECT DISTINCT exploded_project_url AS project_url
         FROM {FGVF}
         LATERAL VIEW explode_outer(project_url) AS exploded_project_url
-        WHERE ARRAY_CONTAINS(kpi_uuids, '{COMMIT_STATS_UUID}')
+        WHERE kpi_uuids = '{COMMIT_STATS_UUID}'
           AND level_1 = 'Acme Corp' AND level_3 = 'demo-acme-corp'
           AND exploded_project_url IS NOT NULL
     )
