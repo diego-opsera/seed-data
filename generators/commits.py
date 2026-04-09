@@ -31,10 +31,10 @@ _LANG_EXT = {
 
 # Projects mapped to user teams
 _TEAM_PROJECT = {
-    "demo-frontend": ("demo-acme-direct/frontend",    "https://github.com/demo-acme-direct/frontend"),
-    "demo-backend":  ("demo-acme-direct/backend",     "https://github.com/demo-acme-direct/backend"),
+    "demo-frontend": ("demo-acme-direct/frontend",    "https://github.com/demo-acme-direct/frontend.git"),
+    "demo-backend":  ("demo-acme-direct/backend",     "https://github.com/demo-acme-direct/backend.git"),
 }
-_DEFAULT_PROJECT = ("demo-acme-direct/api-gateway", "https://github.com/demo-acme-direct/api-gateway")
+_DEFAULT_PROJECT = ("demo-acme-direct/api-gateway", "https://github.com/demo-acme-direct/api-gateway.git")
 
 # Copilot attribution grows from 20% → 65% over the year
 _COPILOT_FLAG_RATE = (0.20, 0.65)
