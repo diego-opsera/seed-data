@@ -20,12 +20,15 @@ n = spark.sql(
 ).collect()[0][0]
 print(f"Deleted {n} rows from source_to_stage.raw_github_teams_members")
 
-# servicenow change requests: scoped to seeded IDs
-n = spark.sql(
-    f"DELETE FROM {CATALOG}.transform_stage.trf_servicenow_change_requests "
-    f"WHERE issue_key LIKE 'demo-seed-chg-%'"
-).collect()[0][0]
-print(f"Deleted {n} rows from transform_stage.trf_servicenow_change_requests")
+# servicenow change requests: scoped to seeded IDs (table may not exist on first run)
+try:
+    n = spark.sql(
+        f"DELETE FROM {CATALOG}.transform_stage.trf_servicenow_change_requests "
+        f"WHERE issue_key LIKE 'demo-seed-chg-%'"
+    ).collect()[0][0]
+    print(f"Deleted {n} rows from transform_stage.trf_servicenow_change_requests")
+except Exception as e:
+    print(f"trf_servicenow_change_requests: skipped ({e})")
 
 # itsm_issues (feeds both devex feature delivery rate AND dora CTFC)
 for schema, table in [
@@ -63,8 +66,11 @@ except Exception as e:
 print("\nVerifying (should all be 0):")
 n = spark.sql(f"SELECT COUNT(*) FROM {CATALOG}.base_datasets.pull_requests WHERE merge_request_id LIKE 'demo-seed-pr-%'").collect()[0][0]
 print(f"  pull_requests (demo-seed-pr-*): {n}")
-n = spark.sql(f"SELECT COUNT(*) FROM {CATALOG}.transform_stage.trf_servicenow_change_requests WHERE issue_key LIKE 'demo-seed-chg-%'").collect()[0][0]
-print(f"  trf_servicenow_change_requests (demo-seed-chg-*): {n}")
+try:
+    n = spark.sql(f"SELECT COUNT(*) FROM {CATALOG}.transform_stage.trf_servicenow_change_requests WHERE issue_key LIKE 'demo-seed-chg-%'").collect()[0][0]
+    print(f"  trf_servicenow_change_requests (demo-seed-chg-*): {n}")
+except Exception:
+    print(f"  trf_servicenow_change_requests: table not yet created")
 n = spark.sql(f"SELECT COUNT(*) FROM {CATALOG}.base_datasets.commits_rest_api WHERE org_name = '{TEST_ORG}'").collect()[0][0]
 print(f"  commits_rest_api: {n}")
 n = spark.sql(f"SELECT COUNT(*) FROM {CATALOG}.source_to_stage.raw_github_teams_members WHERE org_name = '{TEST_ORG}'").collect()[0][0]

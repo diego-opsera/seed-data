@@ -21,6 +21,31 @@ story    = load_yaml("config/stories/narrative.yaml")
 
 entities_direct = {**entities, "orgs": [entities["orgs"][1]]}
 
+# ── Part 0: create tables that may not exist yet ──────────────────────────────
+spark.sql(f"""
+    CREATE TABLE IF NOT EXISTS {CATALOG}.transform_stage.trf_servicenow_change_requests (
+        issue_key            STRING,
+        issue_summary        STRING,
+        issue_project        STRING,
+        issue_status         STRING,
+        issue_resolution_name STRING,
+        issue_start_date     DATE,
+        issue_started_at     TIMESTAMP,
+        issue_resolved_at    TIMESTAMP,
+        issue_updated_at     TIMESTAMP,
+        correlation_id       STRING,
+        itsm_source          STRING,
+        scope                STRING,
+        cr_class             STRING,
+        issue_created_by     STRING,
+        issue_updated_by     STRING,
+        closed_by            STRING,
+        assignee_name        STRING
+    )
+    USING DELTA
+""")
+print("transform_stage.trf_servicenow_change_requests: table ready")
+
 # ── Part 1: base table data ───────────────────────────────────────────────────
 statements = []
 statements += [(pull_requests.TABLE,                  s) for s in pull_requests.generate(CATALOG, entities_direct, story)]
