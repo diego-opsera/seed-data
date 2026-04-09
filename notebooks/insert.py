@@ -38,13 +38,14 @@ run("core/insert.py")
 # 2. direct — copilot data (org=demo-acme-direct): direct_data, seats, billing, ai metrics
 run("direct/insert.py")
 
-# 3. devex — devex data (org=demo-acme-direct): pull_requests, commits, teams, itsm + devex filter group
-#    Must run before dora/ (CTFC depends on mt_itsm_issues_hist seeded here)
-run("devex/insert.py")
-
-# 4. dora — pipeline events, sdm tables, DORA/CTFC filter config
-#    Depends on devex/'s mt_itsm_issues_hist
+# 3. dora — pipeline events, sdm tables, DORA/CTFC filter group
+#    Must run before devex/ so the shared filter group exists for devex to attach to
 run("dora/insert.py")
+
+# 4. devex — devex data: pull_requests, commits, teams, itsm
+#    Attaches devex filter values to the filter group created by dora/
+#    (CTFC itsm dependency is at API query time, not insert time)
+run("devex/insert.py")
 
 # 5. release_mgmt — release management (fix_version LIKE 'demo-%')
 run("release_mgmt/insert.py")

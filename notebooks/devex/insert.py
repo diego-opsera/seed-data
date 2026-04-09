@@ -1,4 +1,4 @@
-import sys, os, uuid
+import sys, os, uuid  # uuid used for filter_values_unity row IDs
 
 for _key in list(sys.modules.keys()):
     if _key.startswith("generators") or _key in ("loader",):
@@ -33,12 +33,22 @@ for i, (table, sql) in enumerate(statements, 1):
     spark.sql(sql)
     print("done")
 
-# ── Part 2: filter group for devex KPIs ──────────────────────────────────────
-# Scoped by createdBy = 'seed-data@devex.io' so devex/delete.py is fully independent
-# from the dora/ filter rows (which use 'seed-data@demo.io').
+# ── Part 2: devex filter values → shared DORA filter group ───────────────────
+# We reuse the filter group created by dora/insert.py so the dashboard's existing
+# filter group config picks up devex KPIs automatically.
+# Devex filter values use created_by = 'seed-data@devex.io' so devex/delete.py
+# can remove them independently without touching DORA filter rows.
 
-FGU_ID          = str(uuid.uuid4())
-FILTER_GROUP_ID = str(uuid.uuid4())
+fgu_rows = spark.sql(f"""
+    SELECT filter_group_id FROM {CATALOG}.master_data.filter_groups_unity
+    WHERE createdBy = 'seed-data@demo.io'
+""").collect()
+
+if not fgu_rows:
+    raise RuntimeError("DORA filter group not found — run dora/insert.py before devex/insert.py")
+
+FILTER_GROUP_ID = fgu_rows[0]["filter_group_id"]
+print(f"Using existing DORA filter_group_id: {FILTER_GROUP_ID}")
 
 DEVEX_GITHUB_KPIS = [
     "adca3119-2b97-4163-831d-ce0f3d150c2f",  # developer_throughput_summary_overview
@@ -78,20 +88,6 @@ def _fvu(filter_group_id, tool_type, filter_name, filter_values, kpi_uuids_sql, 
         )
     """)
 
-
-spark.sql(f"""
-    INSERT INTO {CATALOG}.master_data.filter_groups_unity
-        (id, level_1, level_2, level_3, level_4, level_5,
-         filter_group_id, createdBy, createdAt, updatedBy, updatedAt, active, roles)
-    VALUES (
-        '{FGU_ID}', 'Acme Corp', '', 'demo-acme-direct', '', '',
-        '{FILTER_GROUP_ID}',
-        'seed-data@devex.io', CURRENT_TIMESTAMP(),
-        'seed-data@devex.io', CURRENT_TIMESTAMP(),
-        true, null
-    )
-""")
-print(f"filter_groups_unity: filter_group_id={FILTER_GROUP_ID}")
 
 # GitHub-based devex charts: filter by project_url
 _fvu(FILTER_GROUP_ID, 'github', 'project_url',

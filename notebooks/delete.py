@@ -20,11 +20,11 @@ run("snaplogic/delete.py")
 # 2. release_mgmt
 run("release_mgmt/delete.py")
 
-# 3. dora
-run("dora/delete.py")
-
-# 4. devex — must delete before direct/ (no hard dependency, but mirrors insert order)
+# 3. devex — delete devex filter values before dora deletes the filter group
 run("devex/delete.py")
+
+# 4. dora — deletes the filter group itself (after devex values are already gone)
+run("dora/delete.py")
 
 # 5. direct
 run("direct/delete.py")
