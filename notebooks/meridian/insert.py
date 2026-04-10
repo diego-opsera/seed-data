@@ -211,10 +211,24 @@ _fvu(FILTER_GROUP_ID, 'jira', 'defect_type',
      CTFC_KPIS_SQL, 8)
 print("filter_values_unity: CTFC filters inserted")
 
-# DevEx GitHub charts: commit_statistics, pull_request_statistics, developer_throughput
+# DevEx GitHub charts: commit_statistics, pr_size, pull_request_statistics, developer_throughput
 DEVEX_GITHUB_KPIS = [
     "adca3119-2b97-4163-831d-ce0f3d150c2f",  # developer_throughput_summary_overview
+    # commit_statistics
     "9fd5ec78-9fce-49a0-8154-24d3109d3f05",  # commit_statistics_overview
+    "af43b1eb-4da0-4197-85fd-d19e146c71a1",  # commit_statistics_sine_wave
+    "bd75f3d3-4058-47e0-9d9c-d1864309e166",  # commit_statistics_tab_data_points
+    "16d4847d-6dd9-443b-838f-420571223228",  # commit_statistics_table_data
+    "33eddd8c-6d0a-415a-be68-bb884ca33ca0",  # commit_to_pr_flow
+    # pr_size
+    "dff33190-627a-4b1f-b2e7-fb95a4ebbe00",  # pr_size_area_chart
+    "0919c241-9149-494a-8294-8dd4c25ab540",  # pr_size_table_data
+    "d049ecd3-3f70-428f-a944-c84bda1fda10",  # pr_size_overview
+    "6ddb4873-9bb9-4776-84e0-c74b64cc9fc2",  # pr_size_area_chart (v2)
+    "3d7ec1a2-6f0b-4cc2-91ef-ad0f074cccfe",  # pr_size_tab_data_points
+    # pull_request_statistics
+    "62caa741-e5ed-4e7a-8698-cbd7d8a2e042",  # pull_request_statistics_overview
+    "9637286b-a5c2-4428-ac3b-9c207b8ad722",  # pull_request_statistics_sine_wave
     "745c5458-56a1-40b1-85b1-81e3fc86d119",  # pull_request_statistics_tab_data
     "fa10f775-0a32-44e4-bab4-c986a70bc563",  # pull_request_statistics_table_data
 ]
@@ -225,6 +239,7 @@ SPACE_GITHUB_KPIS = [
     "space_c3d4e5f6-g7h8-9012-cdef-345678901234",  # space_devex_metrics
     "space_d4e5f6g7-h8i9-0123-defg-456789012345",  # commits_vs_space
     "space_e5f6g7h8-i9j0-1234-efgh-567890123456",  # pr_size_vs_performance
+    "space_f6g7h8i9-j0k1-2345-fghi-678901234567",  # space_pr_metrics
     "space_g7h8i9j0-k1l2-3456-ghij-789012345678",  # space_activity_patterns
     "space_h8i9j0k1-l2m3-4567-hijk-890123456789",  # space_commit_patterns
 ]
