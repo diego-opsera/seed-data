@@ -10,6 +10,7 @@ os.chdir("/tmp/seed-data")
 
 from generators import (
     dora_meridian,
+    devex_meridian,
     direct_data, seats_usage, org_mapping,
     ide_org_level, ai_assistant_acceptance, ai_usage_user_level,
     copilot_billing, code_scan_alert, secret_scan_alert,
@@ -97,6 +98,17 @@ direct_statements += [(secret_scan_alert.TABLE,       s) for s in secret_scan_al
 
 for i, (table, sql) in enumerate(direct_statements, 1):
     print(f"[Direct {i}/{len(direct_statements)}] {table}...", end=" ")
+    spark.sql(sql)
+    print("done")
+
+# ── Part 2b: DevEx (commits + PRs) ────────────────────────────────────────────
+devex_result = devex_meridian.generate(CATALOG, entities_meridian, meridian_story)
+devex_statements = (
+    [("commits_rest_api", s) for s in devex_result["commits"]] +
+    [("pull_requests",    s) for s in devex_result["prs"]]
+)
+for i, (table, sql) in enumerate(devex_statements, 1):
+    print(f"[DevEx {i}/{len(devex_statements)}] {table}...", end=" ")
     spark.sql(sql)
     print("done")
 
@@ -198,6 +210,48 @@ _fvu(FILTER_GROUP_ID, 'jira', 'defect_type',
      ['Bug', 'bug'],
      CTFC_KPIS_SQL, 8)
 print("filter_values_unity: CTFC filters inserted")
+
+# DevEx GitHub charts: commit_statistics, pull_request_statistics, developer_throughput
+DEVEX_GITHUB_KPIS = [
+    "adca3119-2b97-4163-831d-ce0f3d150c2f",  # developer_throughput_summary_overview
+    "9fd5ec78-9fce-49a0-8154-24d3109d3f05",  # commit_statistics_overview
+    "745c5458-56a1-40b1-85b1-81e3fc86d119",  # pull_request_statistics_tab_data
+    "fa10f775-0a32-44e4-bab4-c986a70bc563",  # pull_request_statistics_table_data
+]
+DEVEX_GITHUB_KPIS_SQL = ", ".join(f"'{k}'" for k in DEVEX_GITHUB_KPIS)
+
+# SPACE charts (commits_vs_space, pr_size_vs_performance, etc.)
+SPACE_GITHUB_KPIS = [
+    "space_c3d4e5f6-g7h8-9012-cdef-345678901234",  # space_devex_metrics
+    "space_d4e5f6g7-h8i9-0123-defg-456789012345",  # commits_vs_space
+    "space_e5f6g7h8-i9j0-1234-efgh-567890123456",  # pr_size_vs_performance
+    "space_g7h8i9j0-k1l2-3456-ghij-789012345678",  # space_activity_patterns
+    "space_h8i9j0k1-l2m3-4567-hijk-890123456789",  # space_commit_patterns
+]
+SPACE_GITHUB_KPIS_SQL = ", ".join(f"'{k}'" for k in SPACE_GITHUB_KPIS)
+
+# Pipeline statistics: points to the Meridian pipeline_activities project_url
+PIPELINE_STATS_KPIS = [
+    "dd3f5cd3-d70d-474c-abb0-f97bf2797e46",  # pipeline_statistics_overview
+    "df1f985e-230e-4375-a027-ad3a50827941",  # pipeline_statistics_sine_wave
+    "430aa77e-46a8-472f-9fda-18b27a5ee1b9",  # pipeline_statistics_stage_summary
+]
+PIPELINE_STATS_KPIS_SQL = ", ".join(f"'{k}'" for k in PIPELINE_STATS_KPIS)
+
+_fvu(FILTER_GROUP_ID, 'github', 'project_url',
+     ['https://github.com/demo-meridian/data-platform'],
+     DEVEX_GITHUB_KPIS_SQL, 9)
+print("filter_values_unity: DevEx github filters inserted")
+
+_fvu(FILTER_GROUP_ID, 'github', 'project_url',
+     ['https://github.com/demo-meridian/data-platform'],
+     SPACE_GITHUB_KPIS_SQL, 10)
+print("filter_values_unity: SPACE github filters inserted")
+
+_fvu(FILTER_GROUP_ID, 'github', 'project_url',
+     ['https://github.com/demo-meridian/data-platform.git'],
+     PIPELINE_STATS_KPIS_SQL, 11)
+print("filter_values_unity: Pipeline stats filters inserted")
 
 # ── Part 5: raw_jira_boards_ci ─────────────────────────────────────────────────
 # board_id=2 is required by the CTFC chart join (underlies the jira_boards view).

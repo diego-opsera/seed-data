@@ -50,6 +50,11 @@ _deletes = [
      "org_name = 'demo-meridian'"),
     ("consumption_layer.ai_assistant_acceptance_info",
      "level_name = 'demo-meridian'"),
+    # DevEx
+    ("base_datasets.commits_rest_api",
+     "org_name = 'demo-meridian'"),
+    ("base_datasets.pull_requests",
+     "merge_request_id LIKE 'meridian-seed-pr-%'"),
     # Filter config
     ("master_data.filter_values_unity",
      "created_by = 'seed-data-meridian@demo.io'"),

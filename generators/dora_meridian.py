@@ -108,26 +108,39 @@ def _business_days(yr, mo):
 
 def _deploy_plan(months, inflection_idx):
     """
-    Return list of (yr, mo, n_deploys, failed_count, deploy_days) per month.
-    All three row generators use the same plan so data is internally consistent.
+    Return list of (yr, mo, idx, n_deploys, failed_count, deploy_days) per month.
+    All row generators use the same plan so data is internally consistent.
+
+    Pre-Opsera: quarterly big-bang batches.
+      Every 3rd month (idx % 3 == 2) is a maintenance window: 8-15 deployments
+      concentrated in the last 10 business days of the month.
+      Other months: 0-1 random emergency deploys (80% chance of 0).
+    Post-Opsera: continuous flow ramping to near-daily.
     """
     total = len(months)
     plan  = []
     for idx, (yr, mo) in enumerate(months):
         t_phase = _phase_t(idx, inflection_idx, total)
         s       = yr * 100 + mo
+        bdays   = _business_days(yr, mo)
+        rng_d   = random.Random(s + 99)
 
         if idx < inflection_idx:
-            n_deploys = max(1, jitter(round(lerp(2, 4, t_phase)), 15, s))
-            frate     = lerp(0.35, 0.30, t_phase)
+            is_maint = (idx % 3 == 2)
+            if is_maint:
+                n_deploys = max(8, jitter(12, 20, s))
+                window    = bdays[-10:] if len(bdays) >= 10 else bdays
+            else:
+                n_deploys = 1 if random.Random(s + 71).random() < 0.20 else 0
+                window    = bdays
+            frate = lerp(0.35, 0.25, t_phase)
         else:
             n_deploys = max(1, jitter(round(lerp(8, 60, t_phase)), 15, s))
             frate     = lerp(0.30, 0.08, t_phase)
+            window    = bdays
 
         failed      = max(0, round(n_deploys * frate))
-        bdays       = _business_days(yr, mo)
-        rng_d       = random.Random(s + 99)
-        deploy_days = sorted(rng_d.choices(bdays, k=n_deploys))
+        deploy_days = sorted(rng_d.choices(window, k=n_deploys)) if n_deploys > 0 else []
         plan.append((yr, mo, idx, n_deploys, failed, deploy_days))
     return plan
 
