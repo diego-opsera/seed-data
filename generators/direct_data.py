@@ -5,7 +5,7 @@ Drives: Feature Active Users, Feature Diversity Score, Sustained Engagement Rate
 """
 import random
 from datetime import date
-from .utils import date_range, expand_users, active_user_count, lerp, _sql_val
+from .utils import date_range, expand_users, active_user_count, lerp, _sql_val, incident_multiplier
 
 
 TABLE = "trf_github_copilot_direct_data"
@@ -38,6 +38,11 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
     value_lines = []
     for d in date_range(story["start_date"], story["end_date"]):
         n = active_user_count(d, story, len(all_users))
+        if n == 0:
+            continue
+        inc_mult = incident_multiplier(d)
+        if inc_mult != 1.0:
+            n = max(0, min(len(all_users), round(n * inc_mult)))
         if n == 0:
             continue
         t = max(0.0, min(1.0, (d - start).days / total_days))

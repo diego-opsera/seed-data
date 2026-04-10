@@ -11,7 +11,7 @@ from collections import defaultdict
 from datetime import date, datetime
 from .utils import (
     date_range, jitter, acceptance_subset, expand_users, active_user_count,
-    day_scale, trend_base, lerp, LANG_ACCEPTANCE_RATES, _sql_val,
+    day_scale, trend_base, lerp, LANG_ACCEPTANCE_RATES, _sql_val, incident_multiplier,
 )
 
 TABLE  = "github_copilot_metrics_ide_org_level"
@@ -55,6 +55,11 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
     value_lines = []
     for d in date_range(story["start_date"], story["end_date"]):
         active_n = active_user_count(d, story, len(all_users))
+        if active_n == 0:
+            continue
+        inc_mult = incident_multiplier(d)
+        if inc_mult != 1.0:
+            active_n = max(0, min(len(all_users), round(active_n * inc_mult)))
         if active_n == 0:
             continue
         scale  = day_scale(d, story)
