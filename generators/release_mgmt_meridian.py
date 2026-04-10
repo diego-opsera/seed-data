@@ -43,7 +43,8 @@ INSERT INTO {catalog}.consumption_layer.release_management_detail
 VALUES
 {values};"""
 
-_PROJECT = "MDP"
+_LEVEL_VALUE = "Meridian Analytics"   # must match hierarchy filter "Project" in the dashboard
+_PROJECT     = "MDP"                   # JIRA project key used inside issue JSON
 
 # Releases aligned to dora_meridian maintenance windows and inflection
 _RELEASES = [
@@ -399,8 +400,8 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
         tests     = _make_tests(rng, phase)
 
         row = (
-            f"('level_1', '{_PROJECT}', "
-            f"'{fix_version}', '{_PROJECT}', "
+            f"('level_1', '{_LEVEL_VALUE}', "
+            f"'{fix_version}', '{_LEVEL_VALUE}', "
             f"'{start_dt}', '{release_dt}', "
             f"'{start_dt}', '{release_dt}', '{status}', "
             f"{_sql_array(issues)}, "
