@@ -12,6 +12,7 @@ from generators import (
     dora_meridian,
     devex_meridian,
     cr_meridian,
+    release_mgmt_meridian,
     direct_data, seats_usage, org_mapping,
     ide_org_level, ai_assistant_acceptance, ai_usage_user_level,
     copilot_billing, code_scan_alert, secret_scan_alert,
@@ -303,3 +304,13 @@ spark.sql(f"""
     )
 """)
 print("raw_jira_boards_ci: board_id=2 inserted")
+
+# ── Part 6: Release Management ─────────────────────────────────────────────────
+# 5 releases: 2 pre-Opsera (quarterly batch), 3 post-Opsera (continuous).
+# Numbers calibrated to look consistent with DORA/DevEx data above.
+
+rm_statements = release_mgmt_meridian.generate(CATALOG, entities_meridian, meridian_story)
+for i, sql in enumerate(rm_statements, 1):
+    print(f"[Release {i}/{len(rm_statements)}] release_management_detail...", end=" ")
+    spark.sql(sql)
+    print("done")

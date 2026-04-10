@@ -58,6 +58,9 @@ _deletes = [
     # Change Requests
     ("transform_stage.trf_servicenow_change_requests",
      "issue_key LIKE 'meridian-seed-chg-%'"),
+    # Release Management
+    ("consumption_layer.release_management_detail",
+     "fix_version LIKE 'meridian-%'"),
     # Filter config
     ("master_data.filter_values_unity",
      "created_by = 'seed-data-meridian@demo.io'"),
