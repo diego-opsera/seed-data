@@ -312,7 +312,7 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
         user_release = release_dt.strftime("%Y-%m-%d")
 
         row = (
-            f"('level_1', '{project}', '{project}', "
+            f"('level_1', '{project}', 'Acme Corp', "
             f"'{fix_version}', '{project}', "
             f"'{user_start}', '{user_release}', "
             f"'{start_dt}', '{release_dt}', '{status}', "
