@@ -119,4 +119,10 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                 f"TIMESTAMP '{snap_ts}', 'enterprise', NULL)"
             )
 
-    return [INSERT_SQL.format(catalog=catalog, values=",\n".join(value_lines))]
+    chunk_size = 500
+    statements = []
+    for i in range(0, len(value_lines), chunk_size):
+        statements.append(
+            INSERT_SQL.format(catalog=catalog, values=",\n".join(value_lines[i:i + chunk_size]))
+        )
+    return statements
