@@ -89,8 +89,12 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                 f"TIMESTAMP '{snap_ts}', 'enterprise', NULL)"
             )
 
-    # ── Allocated-but-inactive seats: weekly Monday snapshots ─────────────────
-    for d in mondays:
+    # ── Allocated-but-inactive seats: daily snapshot every calendar day ─────
+    # Must cover weekends too: allocated_n is a billing count (constant), but
+    # active_n is 0 on weekends. Without weekend rows the chart drops to 0
+    # on Sat/Sun even though the org is still billed for those seats.
+    all_days = list(date_range(story["start_date"], story["end_date"]))
+    for d in all_days:
         allocated_n = _allocated_count(d, fixed_alloc)
         active_n    = min(active_user_count(d, story, len(all_users)), allocated_n)
         if allocated_n == 0:
