@@ -20,18 +20,11 @@ INSERT INTO {catalog}.base_datasets.code_scan_alert
 VALUES
 {values};"""
 
-_REPOS = [
-    ("demo-acme-corp/backend",     "https://github.com/demo-acme-corp/backend"),
-    ("demo-acme-corp/frontend",    "https://github.com/demo-acme-corp/frontend"),
-    ("demo-acme-corp/api-gateway", "https://github.com/demo-acme-corp/api-gateway"),
-]
-
 # Weighted toward medium/high — realistic GHAS distribution
 _SEVERITIES = ["critical", "high", "high", "medium", "medium", "medium", "low", "warning", "note"]
 
-_TEAMS = [["demo-backend"], ["demo-frontend"], ["demo-backend", "demo-frontend"]]
-
-# Spike overrides: SEV1 emergency weekend (Mar 7-8 2026) and secondary incident (Nov 18 2025).
+# Spike overrides for the Acme incident story.
+# Applied only when story["security_spikes"] is True.
 # Weekend days are normally skipped but included here for the outage window.
 # Nov 18 peak is ~50% of the March peak.
 _SPIKE_DAYS = {
@@ -53,12 +46,21 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
     start = date.fromisoformat(story["start_date"])
     end   = date.fromisoformat(story["end_date"])
 
+    repos = [(r["name"], r["html_url"]) for r in entities.get("repos", [])]
+
+    team_names = [t["name"] for t in entities.get("teams", [])]
+    teams_pool = [[t] for t in team_names]
+    if len(team_names) >= 2:
+        teams_pool.append(team_names)
+
+    spike_days = _SPIKE_DAYS if story.get("security_spikes", False) else {}
+
     alert_counter = 10001
     value_lines = []
 
     for d in date_range(story["start_date"], story["end_date"]):
-        if d in _SPIKE_DAYS:
-            n_alerts = _SPIKE_DAYS[d]
+        if d in spike_days:
+            n_alerts = spike_days[d]
         elif d.weekday() >= 5:
             continue
         else:
@@ -69,9 +71,9 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
         for seq in range(n_alerts):
             rng = random.Random(hash((str(d), seq, "code_scan")) % (2**31))
 
-            repo_name, repo_url = rng.choice(_REPOS)
+            repo_name, repo_url = rng.choice(repos)
             severity = rng.choice(_SEVERITIES)
-            teams = rng.choice(_TEAMS)
+            teams = rng.choice(teams_pool)
 
             number = alert_counter
             alert_counter += 1

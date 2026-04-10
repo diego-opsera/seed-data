@@ -17,6 +17,15 @@ teams:
     slug: "demo-frontend"
     org_name: "demo-acme-engineering"
 
+# GitHub repos for GHAS security alert generation (code_scan_alert, secret_scan_alert)
+repos:
+  - name: "demo-acme-direct/backend"
+    html_url: "https://github.com/demo-acme-direct/backend"
+  - name: "demo-acme-direct/frontend"
+    html_url: "https://github.com/demo-acme-direct/frontend"
+  - name: "demo-acme-direct/api-gateway"
+    html_url: "https://github.com/demo-acme-direct/api-gateway"
+
 users:
   - id: 9990001
     login: "demo-alice"

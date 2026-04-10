@@ -50,3 +50,6 @@ active_features:
   - chat_panel_ask_mode
   - chat_panel_edit_mode
   - agent_edit
+
+# Enable the Acme incident spike days in GHAS security alert generators
+security_spikes: true

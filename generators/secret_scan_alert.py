@@ -18,18 +18,11 @@ INSERT INTO {catalog}.base_datasets.secret_scan_alert
 VALUES
 {values};"""
 
-_REPOS = [
-    ("demo-acme-corp/backend",     "https://github.com/demo-acme-corp/backend"),
-    ("demo-acme-corp/frontend",    "https://github.com/demo-acme-corp/frontend"),
-    ("demo-acme-corp/api-gateway", "https://github.com/demo-acme-corp/api-gateway"),
-]
-
 # Secrets tend to be high/critical severity
 _SEVERITIES = ["critical", "high", "high", "medium", "medium", "low"]
 
-_TEAMS = [["demo-backend"], ["demo-frontend"], ["demo-backend", "demo-frontend"]]
-
-# Mirrors the code_scan spikes at roughly half the volume.
+# Spike overrides for the Acme incident story — mirrors code_scan at ~half the volume.
+# Applied only when story["security_spikes"] is True.
 _SPIKE_DAYS = {
     date(2026, 3, 5):   2,
     date(2026, 3, 6):   3,
@@ -49,12 +42,21 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
     start = date.fromisoformat(story["start_date"])
     end   = date.fromisoformat(story["end_date"])
 
+    repos = [(r["name"], r["html_url"]) for r in entities.get("repos", [])]
+
+    team_names = [t["name"] for t in entities.get("teams", [])]
+    teams_pool = [[t] for t in team_names]
+    if len(team_names) >= 2:
+        teams_pool.append(team_names)
+
+    spike_days = _SPIKE_DAYS if story.get("security_spikes", False) else {}
+
     alert_counter = 5001
     value_lines = []
 
     for d in date_range(story["start_date"], story["end_date"]):
-        if d in _SPIKE_DAYS:
-            n_alerts = _SPIKE_DAYS[d]
+        if d in spike_days:
+            n_alerts = spike_days[d]
         elif d.weekday() >= 5:
             continue
         else:
@@ -65,9 +67,9 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
         for seq in range(n_alerts):
             rng = random.Random(hash((str(d), seq, "secret_scan")) % (2**31))
 
-            repo_name, repo_url = rng.choice(_REPOS)
+            repo_name, repo_url = rng.choice(repos)
             severity = rng.choice(_SEVERITIES)
-            teams = rng.choice(_TEAMS)
+            teams = rng.choice(teams_pool)
 
             number = alert_counter
             alert_counter += 1

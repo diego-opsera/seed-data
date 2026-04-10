@@ -1,0 +1,37 @@
+name: "meridian_narrative"
+# Date range is overwritten at runtime by notebooks/meridian/insert.py
+# (merged from narrative.yaml so both stories share the same rolling window)
+start_date: "2025-04-01"
+end_date: "2026-03-31"
+
+# Small data engineering team (10 engineers) ramping up Copilot adoption.
+# user_count_start=2 → ~20% initial adoption (2 of ~10 engineers using Copilot)
+# user_count_end=12  → full team + new hires who joined post-Opsera
+user_count_start: 2
+user_count_end: 12
+user_count_noise_pct: 20
+user_count_daily_abs_noise: 2
+
+# Data engineers write PySpark and SQL — moderate completion cadence
+per_user_per_day_start:
+  code_generation_activity_count: 10
+  user_initiated_interaction_count: 3
+  loc_suggested_to_add: 50
+  loc_suggested_to_delete: 5
+
+per_user_per_day_end:
+  code_generation_activity_count: 50
+  user_initiated_interaction_count: 18
+  loc_suggested_to_add: 210
+  loc_suggested_to_delete: 20
+
+noise_pct: 12
+
+weekend_multiplier: 0.0
+holiday_multiplier: 0.03
+
+active_features:
+  - code_completion
+  - chat_panel_ask_mode
+  - chat_panel_edit_mode
+  - agent_edit
