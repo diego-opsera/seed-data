@@ -11,6 +11,7 @@ os.chdir("/tmp/seed-data")
 from generators import (
     dora_meridian,
     devex_meridian,
+    cr_meridian,
     direct_data, seats_usage, org_mapping,
     ide_org_level, ai_assistant_acceptance, ai_usage_user_level,
     copilot_billing, code_scan_alert, secret_scan_alert,
@@ -109,6 +110,13 @@ devex_statements = (
 )
 for i, (table, sql) in enumerate(devex_statements, 1):
     print(f"[DevEx {i}/{len(devex_statements)}] {table}...", end=" ")
+    spark.sql(sql)
+    print("done")
+
+# ── Part 2c: Change Requests ───────────────────────────────────────────────────
+cr_statements = cr_meridian.generate(CATALOG, entities_meridian, meridian_story)
+for i, sql in enumerate(cr_statements, 1):
+    print(f"[CR {i}/{len(cr_statements)}] trf_servicenow_change_requests...", end=" ")
     spark.sql(sql)
     print("done")
 
@@ -267,6 +275,20 @@ _fvu(FILTER_GROUP_ID, 'github', 'project_url',
      ['https://github.com/demo-meridian/data-platform.git'],
      PIPELINE_STATS_KPIS_SQL, 11)
 print("filter_values_unity: Pipeline stats filters inserted")
+
+# Change Request: assignment_groups matches trf_servicenow_change_requests.issue_project
+CHANGE_REQUEST_KPIS = [
+    "4791045c-5bb4-4745-8c2f-d68e5783da0a",  # change_request_overview
+    "f3f7946a-3153-419f-9ce8-ab8117cdc395",  # change_request_chart_data (sine)
+    "255e537f-7572-461b-be48-b46ead7e5d70",  # change_request_summary_block
+    "ec56bcb4-86ca-413c-bb57-bb229483658a",  # change_request_table_data
+    "fc56bcb4-86ca-413c-bb57-bb229483658a",  # change_request_filters_data
+]
+CHANGE_REQUEST_KPIS_SQL = ", ".join(f"'{k}'" for k in CHANGE_REQUEST_KPIS)
+_fvu(FILTER_GROUP_ID, 'servicenow', 'assignment_groups',
+     [cr_meridian.ASSIGNMENT_GROUP],
+     CHANGE_REQUEST_KPIS_SQL, 12)
+print("filter_values_unity: Change Request filters inserted")
 
 # ── Part 5: raw_jira_boards_ci ─────────────────────────────────────────────────
 # board_id=2 is required by the CTFC chart join (underlies the jira_boards view).

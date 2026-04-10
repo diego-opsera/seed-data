@@ -55,6 +55,9 @@ _deletes = [
      "org_name = 'demo-meridian'"),
     ("base_datasets.pull_requests",
      "merge_request_id LIKE 'meridian-seed-pr-%'"),
+    # Change Requests
+    ("transform_stage.trf_servicenow_change_requests",
+     "issue_key LIKE 'meridian-seed-chg-%'"),
     # Filter config
     ("master_data.filter_values_unity",
      "created_by = 'seed-data-meridian@demo.io'"),
