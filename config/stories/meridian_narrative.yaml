@@ -27,6 +27,9 @@ per_user_per_day_end:
 
 noise_pct: 12
 
+# Copilot seat allocation for the Meridian org (small team — 15 seats total)
+allocated_seats: 15
+
 weekend_multiplier: 0.0
 holiday_multiplier: 0.03
 

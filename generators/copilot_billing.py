@@ -43,7 +43,9 @@ _QUARTER_ALLOC = [
 ]
 
 
-def _allocated_count(d: date) -> int:
+def _allocated_count(d: date, fixed: int | None = None) -> int:
+    if fixed is not None:
+        return fixed
     for q_start, count in _QUARTER_ALLOC:
         if d >= q_start:
             return count
@@ -51,17 +53,18 @@ def _allocated_count(d: date) -> int:
 
 
 def generate(catalog: str, entities: dict, story: dict) -> list[str]:
-    org_name  = entities["orgs"][0]["name"]   # demo-acme-direct (entities_direct remaps orgs[1] -> [0])
-    all_users = expand_users(entities, story)
+    org_name    = entities["orgs"][0]["name"]   # demo-acme-direct (entities_direct remaps orgs[1] -> [0])
+    all_users   = expand_users(entities, story)
+    fixed_alloc = story.get("allocated_seats")
 
-    mondays = [
-        d for d in date_range(story["start_date"], story["end_date"])
-        if d.weekday() == 0
-    ]
+    # Daily rows so the chart renders a flat line rather than weekly spikes.
+    # Billing data is conceptually "current as of today" — a daily snapshot
+    # is the correct representation for a time-series chart.
+    days = list(date_range(story["start_date"], story["end_date"]))
 
     value_lines = []
-    for d in mondays:
-        allocated_n = _allocated_count(d)
+    for d in days:
+        allocated_n = _allocated_count(d, fixed_alloc)
         active_n    = min(active_user_count(d, story, len(all_users)), allocated_n)
         inactive_n  = allocated_n - active_n
         snap_ts     = f"{d.isoformat()} 12:00:00"

@@ -39,8 +39,11 @@ _QUARTER_ALLOC = [
 ]
 
 
-def _allocated_count(d: date) -> int:
-    """Return the number of allocated seats for a given date (step function)."""
+def _allocated_count(d: date, fixed: int | None = None) -> int:
+    """Return the number of allocated seats for a given date (step function).
+    If fixed is provided, return it unconditionally (story-level override)."""
+    if fixed is not None:
+        return fixed
     for q_start, count in _QUARTER_ALLOC:
         if d >= q_start:
             return count
@@ -51,6 +54,7 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
     org_name  = entities["orgs"][1]["name"]          # demo-acme-direct
     all_users = expand_users(entities, story)
     start     = date.fromisoformat(story["start_date"])
+    fixed_alloc = story.get("allocated_seats")
 
     created_at = f"{start.isoformat()} 00:00:00"
 
@@ -69,7 +73,7 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
 
     # ── Active seats: one row per user per weekday ────────────────────────────
     for d in weekdays:
-        active_n = min(active_user_count(d, story, len(all_users)), _allocated_count(d))
+        active_n = min(active_user_count(d, story, len(all_users)), _allocated_count(d, fixed_alloc))
         if active_n == 0:
             continue
         snap_ts = f"{d.isoformat()} 12:00:00"
@@ -87,7 +91,7 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
 
     # ── Allocated-but-inactive seats: weekly Monday snapshots ─────────────────
     for d in mondays:
-        allocated_n = _allocated_count(d)
+        allocated_n = _allocated_count(d, fixed_alloc)
         active_n    = min(active_user_count(d, story, len(all_users)), allocated_n)
         if allocated_n == 0:
             continue
