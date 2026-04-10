@@ -17,7 +17,7 @@ TABLE = "release_management_detail"
 
 INSERT_SQL = """\
 INSERT INTO {catalog}.consumption_layer.release_management_detail
-  (level_name, level_value,
+  (level_name, level_value, level_1,
    fix_version, issue_project,
    user_start_date, user_release_date,
    start_date, release_date, release_status,
@@ -312,7 +312,7 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
         user_release = release_dt.strftime("%Y-%m-%d")
 
         row = (
-            f"('level_1', '{project}', "
+            f"('level_1', '{project}', '{project}', "
             f"'{fix_version}', '{project}', "
             f"'{user_start}', '{user_release}', "
             f"'{start_dt}', '{release_dt}', '{status}', "

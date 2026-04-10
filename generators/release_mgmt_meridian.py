@@ -33,7 +33,7 @@ TABLE = "release_management_detail"
 
 INSERT_SQL = """\
 INSERT INTO {catalog}.consumption_layer.release_management_detail
-  (level_name, level_value,
+  (level_name, level_value, level_1,
    fix_version, issue_project,
    user_start_date, user_release_date,
    start_date, release_date, release_status,
@@ -400,7 +400,7 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
         tests     = _make_tests(rng, phase)
 
         row = (
-            f"('level_1', '{_LEVEL_VALUE}', "
+            f"('level_1', '{_LEVEL_VALUE}', '{_LEVEL_VALUE}', "
             f"'{fix_version}', '{_LEVEL_VALUE}', "
             f"'{start_dt}', '{release_dt}', "
             f"'{start_dt}', '{release_dt}', '{status}', "
