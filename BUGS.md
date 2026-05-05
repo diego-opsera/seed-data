@@ -75,7 +75,32 @@ The seed-data generator stores `'Y'` to satisfy the 2-of-3 majority of queries, 
 
 ---
 
-## 8. Jira Issues Analysis shows 0 despite seeded data
+## 8. Flow Dashboard pipeline tabs leak rows across orgs/filters — STAGE_FILTERS missing parentheses
+
+**Charts:** Value Stream → Flow Dashboard → any pipeline-stage tab (Code Review, CI Pipeline, Security, Quality, QA, Deploy, Production)
+**Symptom:** With SBG filter set to `Acme Corp` (or any other scoping filter), the pipeline-rows table still shows tickets from every other SBG/org. E.g. on the codeReview tab filtered to `Acme Corp`, MDP-* rows from `demo-meridian` show alongside ACME-* rows.
+**Root cause:** `STAGE_FILTERS` constants in `value-stream.controller.js:16-24` are emitted without parentheses around their OR groups:
+
+```js
+codeReview: "AND LOWER(pipeline_step_type) LIKE '%review%' OR LOWER(pipeline_step_type) LIKE '%code review%' OR LOWER(pipeline_step_name) LIKE '%review%'"
+```
+
+When concatenated into `flow-dashboard-pipeline.sql` alongside the user-filter `whereClause` (which uses `AND`), SQL operator precedence (AND binds tighter than OR) makes the middle OR branches unconstrained:
+
+```sql
+(pipeline_id IS NOT NULL AND pipeline_step_name IS NOT NULL AND step_type LIKE '%review%')
+ OR step_type LIKE '%code review%'
+ OR (step_name LIKE '%review%' AND sbg = 'Acme Corp')
+```
+
+So any row matching the bare LIKE (e.g. step_type='review') passes regardless of sbg/org/etc.
+**Fix:** Wrap each STAGE_FILTERS entry in parentheses. E.g.: `"AND (LOWER(pipeline_step_type) LIKE '%review%' OR LOWER(pipeline_step_type) LIKE '%code review%' OR LOWER(pipeline_step_name) LIKE '%review%')"`. Apply the same treatment to all 7 entries (codeReview, ci, security, quality, qa, deploy, production).
+
+**Note:** Seed data is correctly tagged — Acme rows have `sbg='Acme Corp'`, Meridian rows have `sbg='Meridian Analytics'`. This is purely an API-side SQL bug.
+
+---
+
+## 9. Jira Issues Analysis shows 0 despite seeded data
 
 **Chart:** Executive Summary (Page 2) → "Jira Issues Analysis" bullet
 **Symptom:** "0 issues resolved with Copilot assistance out of 0 total resolved issues" even though `transform_stage.mt_itsm_issues_current` has 266 rows for `customer_id = 'demo-acme-direct'` and `base_datasets.v_itsm_issues_current` surfaces them correctly.
