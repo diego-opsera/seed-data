@@ -64,7 +64,18 @@ The seed-data generator stores `'Y'` to satisfy the 2-of-3 majority of queries, 
 
 ---
 
-## 7. Jira Issues Analysis shows 0 despite seeded data
+## 7. Issue Stream detail view 500s on first request — ML service async response not handled
+
+**Chart:** Value Stream → Issue Stream → click any issue (e.g. `/insights/value-stream/issue/ACME-1001`)
+**Symptom:** First request returns 500 with body `{"message":"Summary generation request in progress"}`. Sometimes a second request succeeds.
+**Root cause:** `ValueStreamController.getIssueStreamData` calls `getSummaryFromMLService` (`value-stream.controller.js:1029`) for an AI summary. The ML service returns an async-style response on first call (status ≠ 200, body indicates the summary job is in progress). At `value-stream.controller.js:274` the helper throws `Error('ML Service error: ...')` for any non-200 response, which bubbles to the outer catch and returns 500 — there's no polling or progressive-result handling.
+**Fix:** In `getSummaryFromMLService`, treat the "in progress" response as a poll-and-wait state (e.g., return cached summary if available, otherwise retry up to N times with backoff before throwing). Alternatively, return the raw issue data on first call without blocking on the ML summary — render the AI summary section client-side once it's ready.
+
+**Note:** Seed data for this feature is correct and complete (`playground_prod.user_working.offerings_jira_pipeline_details` populated for `demo-acme-direct` and `demo-meridian`; the list panel + the underlying SQL both work). This bug is purely API-side.
+
+---
+
+## 8. Jira Issues Analysis shows 0 despite seeded data
 
 **Chart:** Executive Summary (Page 2) → "Jira Issues Analysis" bullet
 **Symptom:** "0 issues resolved with Copilot assistance out of 0 total resolved issues" even though `transform_stage.mt_itsm_issues_current` has 266 rows for `customer_id = 'demo-acme-direct'` and `base_datasets.v_itsm_issues_current` surfaces them correctly.
