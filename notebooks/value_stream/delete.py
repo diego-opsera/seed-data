@@ -1,16 +1,27 @@
 CATALOG = "playground_prod"
 
-# Scoped strictly to demo orgs. The user_working schema also contains 4 other
-# unrelated tables (copilot_licenses_usage_metric_view, pull_requests_bkup_5june,
-# raw_github_copilot_28_days_user_metrics_temp_*) — those are NOT touched by this script.
+# All deletes are tightly scoped — none touch dora's pipeline_activities rows
+# (those are tagged record_inserted_by = 'seed-data' / 'seed-data-meridian').
+# Our failure rows use 'seed-data-value-stream' as a distinct scope tag.
 
-table     = "user_working.offerings_jira_pipeline_details"
-fqn       = f"{CATALOG}.{table}"
-predicate = "org_name IN ('demo-acme-direct', 'demo-meridian')"
+_deletes = [
+    # Main fact table — scoped to demo orgs
+    ("user_working.offerings_jira_pipeline_details",
+     "org_name IN ('demo-acme-direct', 'demo-meridian')"),
+    # Pipeline Failures bridge tables — scoped to our distinct record_inserted_by tag
+    ("base_datasets.pipeline_activities",
+     "record_inserted_by = 'seed-data-value-stream'"),
+    ("user_working.repo_pipeline_details",
+     "record_inserted_by = 'seed-data-value-stream'"),
+    ("user_working.github_offering_workflow_job_logs",
+     "record_inserted_by = 'seed-data-value-stream'"),
+]
 
-try:
-    n = spark.sql(f"SELECT COUNT(*) FROM {fqn} WHERE {predicate}").collect()[0][0]
-    spark.sql(f"DELETE FROM {fqn} WHERE {predicate}")
-    print(f"{table}: deleted {n} rows")
-except Exception as e:
-    print(f"{table}: ERROR — {e}")
+for table, predicate in _deletes:
+    fqn = f"{CATALOG}.{table}"
+    try:
+        n = spark.sql(f"SELECT COUNT(*) FROM {fqn} WHERE {predicate}").collect()[0][0]
+        spark.sql(f"DELETE FROM {fqn} WHERE {predicate}")
+        print(f"{table}: deleted {n} rows")
+    except Exception as e:
+        print(f"{table}: ERROR — {e}")

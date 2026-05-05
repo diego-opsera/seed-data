@@ -115,9 +115,51 @@ CREATE TABLE IF NOT EXISTS {FQN} (
 """)
 print(f"Created (or kept): {FQN}")
 
-# ── Verify ───────────────────────────────────────────────────────────────────
-n = spark.sql(f"SELECT COUNT(*) FROM {FQN}").collect()[0][0]
-print(f"  {TABLE}: {n} rows")
+# ── repo_pipeline_details ────────────────────────────────────────────────────
+# Bridge table for the Pipeline Failures feature. Each row mirrors a failed
+# pipeline-step run from base_datasets.pipeline_activities (joined via
+# pipeline_id + project_name) so the page can display log content from the
+# logs table alongside the issue context.
 
-cols = spark.sql(f"DESCRIBE {FQN}").collect()
-print(f"  columns: {len([r for r in cols if r['col_name'] and not r['col_name'].startswith('#')])}")
+RPD_FQN = f"{CATALOG}.{SCHEMA}.repo_pipeline_details"
+
+spark.sql(f"""
+CREATE TABLE IF NOT EXISTS {RPD_FQN} (
+  pipeline_id              STRING,
+  org_name                 STRING,
+  project_name             STRING,
+  pipeline_name            STRING,
+  pipeline_status          STRING,
+  pipeline_step_name       STRING,
+  pipeline_step_conclusion STRING,    -- 'success' / 'failure'
+  pipeline_started_at      TIMESTAMP,
+  pipeline_finished_at     TIMESTAMP,
+  pipeline_branch          STRING,
+  pipeline_commit_sha      STRING,
+  ticket_key               STRING,
+  record_inserted_by       STRING     -- scope tag for safe deletion
+) {_TBLPROPS}
+""")
+print(f"Created (or kept): {RPD_FQN}")
+
+# ── github_offering_workflow_job_logs ────────────────────────────────────────
+# Stores raw build/test/deploy step output. The Pipeline Failures SQL joins
+# CAST(pa.step_id AS STRING) = CAST(logs.job AS STRING).
+
+LOGS_FQN = f"{CATALOG}.{SCHEMA}.github_offering_workflow_job_logs"
+
+spark.sql(f"""
+CREATE TABLE IF NOT EXISTS {LOGS_FQN} (
+  job                STRING,
+  logs               STRING,
+  record_inserted_by STRING            -- scope tag for safe deletion
+) {_TBLPROPS}
+""")
+print(f"Created (or kept): {LOGS_FQN}")
+
+# ── Verify ───────────────────────────────────────────────────────────────────
+for fqn in [FQN, RPD_FQN, LOGS_FQN]:
+    n = spark.sql(f"SELECT COUNT(*) FROM {fqn}").collect()[0][0]
+    cols = spark.sql(f"DESCRIBE {fqn}").collect()
+    n_cols = len([r for r in cols if r["col_name"] and not r["col_name"].startswith("#")])
+    print(f"  {fqn.split('.')[-1]}: {n} rows, {n_cols} columns")
