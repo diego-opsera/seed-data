@@ -51,7 +51,20 @@ All affect the demo-acme-direct playground instance.
 
 ---
 
-## 6. Jira Issues Analysis shows 0 despite seeded data
+## 6. Issue Stream / Flow View — copilot_commit_flag inconsistent type across SQL queries
+
+**Charts:** Value Stream → Issue Stream "Top issues by flow references" (`ai_assisted_commits` count)
+**Symptom:** `ai_assisted_commits` always reports 0 in the Issue Stream list panel even when commits do have a Copilot flag set; AI Assist tab and Commit metrics tab show correct numbers.
+**Root cause:** The `copilot_commit_flag` column is referenced inconsistently across `vnxt-insights-api/src/queries/value-stream/`:
+  - `issue-stream-list.sql:20` uses `copilot_commit_flag = true` (boolean literal)
+  - `flow-dashboard-commit-metrics.sql:7,19,20` and `flow-dashboard-aiassist.sql:39` use `copilot_commit_flag = 'Y'` (string literal)
+
+The seed-data generator stores `'Y'` to satisfy the 2-of-3 majority of queries, so the issue-stream-list comparison `'Y' = true` casts to `'Y' = 'true'` which is false — yielding 0.
+**Fix:** Standardize all SQL files to use the same convention. Recommended: change `issue-stream-list.sql:20` to `copilot_commit_flag = 'Y'` to match the other two files.
+
+---
+
+## 7. Jira Issues Analysis shows 0 despite seeded data
 
 **Chart:** Executive Summary (Page 2) → "Jira Issues Analysis" bullet
 **Symptom:** "0 issues resolved with Copilot assistance out of 0 total resolved issues" even though `transform_stage.mt_itsm_issues_current` has 266 rows for `customer_id = 'demo-acme-direct'` and `base_datasets.v_itsm_issues_current` surfaces them correctly.

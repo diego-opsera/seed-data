@@ -14,22 +14,25 @@ def run(path):
     exec(open(f"{BASE}/{path}").read(), globals())
 
 # Reverse of insert order
-# 1. snaplogic
+# 1. value_stream — Issue Stream / Flow View fact table (self-contained, no deps)
+run("value_stream/delete.py")
+
+# 2. snaplogic
 run("snaplogic/delete.py")
 
-# 2. release_mgmt
+# 3. release_mgmt
 run("release_mgmt/delete.py")
 
-# 3. devex — delete devex filter values before dora deletes the filter group
+# 4. devex — delete devex filter values before dora deletes the filter group
 run("devex/delete.py")
 
-# 4. dora — deletes the filter group itself (after devex values are already gone)
+# 5. dora — deletes the filter group itself (after devex values are already gone)
 run("dora/delete.py")
 
-# 5. direct
+# 6. direct
 run("direct/delete.py")
 
-# 6. core
+# 7. core
 run("core/delete.py")
 
 print("\n" + "="*60)

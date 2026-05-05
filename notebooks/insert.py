@@ -53,6 +53,11 @@ run("release_mgmt/insert.py")
 # 6. snaplogic — SnapLogic integration data (org=demo-acme-direct)
 run("snaplogic/insert.py")
 
+# 7. value_stream — Issue Stream / Flow View denormalized fact table
+#    Self-contained — generates fresh data, no dependency on other batches' tables.
+#    Seeds rows for BOTH demo-acme-direct and demo-meridian.
+run("value_stream/insert.py")
+
 print("\n" + "="*60)
 print("  MASTER INSERT COMPLETE")
 print("="*60)
