@@ -21,6 +21,19 @@ returns >0 and the page can drill into the linked ticket's flow.
 
 Failures are placed within the last 30 days because pipeline-failures.sql
 hardcodes `pipeline_started_at >= DATE_SUB(CURRENT_DATE(), 30)`.
+
+Two phases:
+  - Phase A (sporadic): one failure per recent ticket, dated to that ticket
+    date, drawn from a 4-step pool (eslint, terraform-apply, trivy-scan,
+    dockerfile-lint). Spreads activity across the last 30 days.
+  - Phase B (today's narrative incident): a coherent story — vendor library
+    auto-patched this morning via Dependabot, breaking API contracts.
+    6 themed step failures (build, pytest, integration-tests, helm-deploy,
+    sonar, mypy) all dated to `today`, with shared log narrative referencing
+    openssl-3.4.0 as the root cause.
+
+Step pools are disjoint so sporadic and incident rows both survive the
+dedup-by-(step_name, project_name) in pipeline-failures-count.sql.
 """
 
 import hashlib
@@ -34,60 +47,18 @@ from .value_stream import OrgConfig
 RECORD_INSERTED_BY = "seed-data-value-stream"
 
 
-# Distinct failure scenarios. step_name is what the dedup partitions on
-# (PARTITION BY pa.step_name, rpd.project_name in pipeline-failures.sql),
-# so 10 distinct names × 2 project_names yields ~20 unique table rows max.
-_FAILURE_SCENARIOS = [
-    ("build-and-test",      "build"),
-    ("pytest-unit-tests",   "test"),
-    ("eslint",              "quality"),
-    ("terraform-apply",     "deploy"),
-    ("helm-deploy-staging", "deploy"),
-    ("trivy-scan",          "security"),
-    ("sonar-quality-gate",  "quality"),
-    ("mypy-type-check",     "quality"),
-    ("integration-tests",   "test"),
-    ("dockerfile-lint",     "quality"),
+# ── Sporadic failure pool — drives Phase A. Disjoint from _INCIDENT_SCENARIOS
+# step_names so dedup-by-(step_name, project_name) keeps both phases visible.
+
+_SPORADIC_FAILURE_SCENARIOS = [
+    ("eslint",          "quality"),
+    ("terraform-apply", "deploy"),
+    ("trivy-scan",      "security"),
+    ("dockerfile-lint", "quality"),
 ]
 
 
-_LOG_TEMPLATES = {
-    "build-and-test": (
-        "[14:23:01] > tsc --noEmit\n"
-        "[14:23:04] src/services/auth.ts:42:14 - error TS2339: Property 'userId' does not exist on type 'AuthContext'.\n"
-        "[14:23:04] 42   const id = ctx.userId;\n"
-        "[14:23:04]                  ~~~~~~\n"
-        "[14:23:04]\n"
-        "[14:23:04] src/handlers/login.ts:18:23 - error TS2554: Expected 2 arguments, but got 1.\n"
-        "[14:23:04] 18   await authService.login(payload);\n"
-        "[14:23:04]                       ~~~~~~~\n"
-        "[14:23:04]\n"
-        "[14:23:04] Found 2 errors in 2 files.\n"
-        "[14:23:04] error Command failed with exit code 2.\n"
-        "[14:23:04] ##[error]Process completed with exit code 2."
-    ),
-    "pytest-unit-tests": (
-        "[15:01:22] ============================= test session starts ==============================\n"
-        "[15:01:22] platform linux -- Python 3.11.9, pytest-7.4.0, pluggy-1.3.0\n"
-        "[15:01:23] collected 234 items\n"
-        "[15:01:32]\n"
-        "[15:01:32] tests/test_user_service.py::test_create_user_validates_email FAILED          [ 32%]\n"
-        "[15:01:32]\n"
-        "[15:01:32] =================================== FAILURES ===================================\n"
-        "[15:01:32] _____________________ test_create_user_validates_email _____________________\n"
-        "[15:01:32]\n"
-        "[15:01:32]     def test_create_user_validates_email():\n"
-        "[15:01:32]         user = User.create(email='not-an-email')\n"
-        "[15:01:32] >       assert user.is_valid()\n"
-        "[15:01:32] E       AssertionError: assert False\n"
-        "[15:01:32] E        +  where False = <bound method User.is_valid of <User id=42>>\n"
-        "[15:01:32]\n"
-        "[15:01:32] tests/test_user_service.py:18: AssertionError\n"
-        "[15:01:32] =========================== short test summary info ============================\n"
-        "[15:01:32] FAILED tests/test_user_service.py::test_create_user_validates_email\n"
-        "[15:01:32] ========================= 1 failed, 233 passed in 8.41s ========================\n"
-        "[15:01:32] ##[error]Process completed with exit code 1."
-    ),
+_SPORADIC_LOG_TEMPLATES = {
     "eslint": (
         "[09:14:55] > eslint . --ext .ts,.tsx\n"
         "[09:15:02]\n"
@@ -115,16 +86,6 @@ _LOG_TEMPLATES = {
         "[11:23:01]\n"
         "[11:23:01] ##[error]Process completed with exit code 1."
     ),
-    "helm-deploy-staging": (
-        "[13:05:11] release 'demo-app-staging' upgrade in progress\n"
-        "[13:05:14] waiting for deployment 'demo-app' rollout to finish\n"
-        "[13:10:14] error: timed out waiting for the condition\n"
-        "[13:10:14]   Deployment 'demo-app' exceeded its progress deadline\n"
-        "[13:10:14]   FailedCreate: pods 'demo-app-7b8f9d' forbidden: exceeded quota\n"
-        "[13:10:14]\n"
-        "[13:10:14] Error: UPGRADE FAILED: timed out waiting for the condition\n"
-        "[13:10:14] ##[error]Process completed with exit code 1."
-    ),
     "trivy-scan": (
         "[10:02:18] Scanning image: registry.example.com/demo-app:1.2.3\n"
         "[10:02:21]\n"
@@ -134,50 +95,8 @@ _LOG_TEMPLATES = {
         "[10:02:21]   Severity: CRITICAL\n"
         "[10:02:21]   Status: fixed in 5.15.149\n"
         "[10:02:21]\n"
-        "[10:02:21] CVE-2024-21626: runc filesystem escape (CRITICAL)\n"
-        "[10:02:21]   Severity: CRITICAL\n"
-        "[10:02:21]   Status: fixed in 1.1.12\n"
-        "[10:02:21]\n"
         "[10:02:21] FAIL: 2 critical vulnerabilities found, threshold = 0\n"
         "[10:02:21] ##[error]Process completed with exit code 1."
-    ),
-    "sonar-quality-gate": (
-        "[16:45:23] ANALYSIS SUCCESSFUL, you can find the analysis report at: https://sonar.example.com/dashboard?id=demo-app\n"
-        "[16:45:24] Polling Quality Gate status...\n"
-        "[16:46:24] Quality Gate status: ERROR\n"
-        "[16:46:24]\n"
-        "[16:46:24] Failing conditions:\n"
-        "[16:46:24]   - Coverage on New Code: 64.3% (required: > 80%)\n"
-        "[16:46:24]   - Duplicated Lines on New Code: 8.2% (required: < 3%)\n"
-        "[16:46:24]   - Reliability Rating on New Code: C (required: A)\n"
-        "[16:46:24]\n"
-        "[16:46:24] ##[error]Process completed with exit code 1."
-    ),
-    "mypy-type-check": (
-        "[08:33:02] > mypy --strict src/\n"
-        "[08:33:14]\n"
-        "[08:33:14] src/handlers/payment.py:78: error: Argument 1 to 'process_payment' has incompatible type 'Optional[str]'; expected 'str'  [arg-type]\n"
-        "[08:33:14] src/services/billing.py:124: error: Item 'None' of 'Optional[Customer]' has no attribute 'subscription'  [union-attr]\n"
-        "[08:33:14] src/services/billing.py:142: error: Function is missing a type annotation for one or more arguments  [no-untyped-def]\n"
-        "[08:33:14]\n"
-        "[08:33:14] Found 3 errors in 2 files (checked 87 source files)\n"
-        "[08:33:14] ##[error]Process completed with exit code 1."
-    ),
-    "integration-tests": (
-        "[12:18:44] Running integration test suite...\n"
-        "[12:18:50] PASS test_login_flow\n"
-        "[12:18:55] FAIL test_payment_callback_idempotency\n"
-        "[12:18:55]\n"
-        "[12:18:55] expected: payment marked as 'paid' on second callback\n"
-        "[12:18:55] actual:   payment status remained 'pending'\n"
-        "[12:18:55]\n"
-        "[12:18:55] traceback:\n"
-        "[12:18:55]   File 'tests/integration/test_payment.py', line 87, in test_payment_callback_idempotency\n"
-        "[12:18:55]     assert payment.status == 'paid'\n"
-        "[12:18:55]   AssertionError\n"
-        "[12:18:55]\n"
-        "[12:18:55] 1 of 24 tests failed.\n"
-        "[12:18:55] ##[error]Process completed with exit code 1."
     ),
     "dockerfile-lint": (
         "[07:55:11] > hadolint Dockerfile\n"
@@ -191,6 +110,114 @@ _LOG_TEMPLATES = {
         "[07:55:11] ##[error]Process completed with exit code 1."
     ),
 }
+
+
+# ── Today's narrative incident — Phase B. All 6 step failures share the same
+# root cause and reference the same Dependabot PR / CVE so the AI summary +
+# any human reading the logs can connect the dots.
+#
+# Story: an early-morning Dependabot auto-merge bumped openssl 3.3.x → 3.4.0
+# to remediate CVE-2026-1147. The new major version removed deprecated APIs
+# (createCipher, CipherContext) that several services depend on. Cascading
+# CI/test/deploy failures result.
+
+_INCIDENT_THEME = "openssl-3.4.0 CVE auto-patch broke API contract"
+
+_INCIDENT_SCENARIOS = [
+    (
+        "build-and-test", "build",
+        "[09:14:31] > tsc --noEmit\n"
+        "[09:14:34] node_modules/openssl/lib/types.d.ts:42:23 - error TS2724: Module 'openssl' has no exported member 'CipherContext'.\n"
+        "[09:14:34] Did you mean 'CipherInstance'?\n"
+        "[09:14:34]\n"
+        "[09:14:34] src/services/auth.ts:18:14 - error TS2305: Module 'openssl' has no exported member 'createCipher'.\n"
+        "[09:14:34] 18  import { createCipher } from 'openssl';\n"
+        "[09:14:34]\n"
+        "[09:14:34] Found 12 errors in 4 files.\n"
+        "[09:14:34] ##[error]openssl@3.4.0 removed deprecated APIs (createCipher, CipherContext) — see https://openssl.org/changelog/3.4.0\n"
+        "[09:14:34] ##[error]Auto-merged via Dependabot earlier today (PR #4821, CVE-2026-1147)"
+    ),
+    (
+        "pytest-unit-tests", "test",
+        "[09:32:11] ============================= test session starts ==============================\n"
+        "[09:32:11] platform linux -- Python 3.11.9, pytest-7.4.0\n"
+        "[09:32:14] collected 412 items\n"
+        "[09:32:42]\n"
+        "[09:32:42] tests/security/test_cipher.py::test_aes_encryption FAILED                    [ 12%]\n"
+        "[09:32:42] tests/security/test_cipher.py::test_token_signing FAILED                     [ 13%]\n"
+        "[09:32:42] tests/auth/test_session.py::test_session_encryption FAILED                   [ 28%]\n"
+        "[09:32:42]\n"
+        "[09:32:42] _____________ test_aes_encryption _____________\n"
+        "[09:32:42]   File 'src/security/cipher.py', line 14, in encrypt\n"
+        "[09:32:42]     cipher = crypto.createCipher('aes-256-cbc', key)\n"
+        "[09:32:42]              ^^^^^^^^^^^^^^^^^^^\n"
+        "[09:32:42] AttributeError: module 'crypto' has no attribute 'createCipher'\n"
+        "[09:32:42]\n"
+        "[09:32:42] (openssl@3.4.0 removed createCipher; use createCipheriv with explicit IV)\n"
+        "[09:32:42]\n"
+        "[09:32:42] ========================= 8 failed, 404 passed in 28.13s =========================\n"
+        "[09:32:42] ##[error]Process completed with exit code 1."
+    ),
+    (
+        "integration-tests", "test",
+        "[10:48:22] Running integration test suite (24 tests)\n"
+        "[10:49:01] FAIL test_login_flow                                          [ 12%]\n"
+        "[10:49:01]   Auth service returned 503 -- TLS handshake failed\n"
+        "[10:49:01]   downstream auth-service crashed at startup:\n"
+        "[10:49:01]   Error: openssl: TypeError: Cipher.update is not a function\n"
+        "[10:49:01]   at /app/src/auth/jwt.js:42\n"
+        "[10:49:01]\n"
+        "[10:49:01] FAIL test_signup_flow                                         [ 14%]\n"
+        "[10:49:01] FAIL test_password_reset_flow                                 [ 16%]\n"
+        "[10:49:01]\n"
+        "[10:49:01] (root cause: openssl@3.4.0 auto-merged today via Dependabot,\n"
+        "[10:49:01]  removed createCipher API our auth service depends on)\n"
+        "[10:49:01]\n"
+        "[10:49:01] 8 of 24 tests failed.\n"
+        "[10:49:01] ##[error]Process completed with exit code 1."
+    ),
+    (
+        "helm-deploy-staging", "deploy",
+        "[11:15:08] Helm deploy aborted: required test gate failed\n"
+        "[11:15:08]\n"
+        "[11:15:08] Pre-deploy gate check:\n"
+        "[11:15:08]   ci-test-pass:        FAIL (12 errors)\n"
+        "[11:15:08]   integration-tests:   FAIL (8 of 24)\n"
+        "[11:15:08]   sonar-quality-gate:  FAIL (coverage 64.3%)\n"
+        "[11:15:08]\n"
+        "[11:15:08] Deploy will not proceed until upstream pipelines are green.\n"
+        "[11:15:08] Hint: revert openssl bump (Dependabot PR #4821) and re-run.\n"
+        "[11:15:08]\n"
+        "[11:15:08] ##[error]Process completed with exit code 1."
+    ),
+    (
+        "sonar-quality-gate", "quality",
+        "[12:02:18] ANALYSIS SUCCESSFUL -- see https://sonar.example.com/dashboard?id=demo-app\n"
+        "[12:02:18] Polling Quality Gate status...\n"
+        "[12:03:18] Quality Gate status: ERROR\n"
+        "[12:03:18]\n"
+        "[12:03:18] Failing conditions:\n"
+        "[12:03:18]   - Coverage on New Code: 64.3% (required: > 80%)\n"
+        "[12:03:18]     Note: 8 unit tests / 3 integration tests failing -- coverage drops because failed tests do not execute branches\n"
+        "[12:03:18]   - New Bugs: 4 (required: 0)\n"
+        "[12:03:18]     Source: openssl-3.4.0 API removal (createCipher, CipherContext)\n"
+        "[12:03:18]\n"
+        "[12:03:18] ##[error]Process completed with exit code 1."
+    ),
+    (
+        "mypy-type-check", "quality",
+        "[08:55:42] > mypy --strict src/\n"
+        "[08:56:11]\n"
+        "[08:56:11] src/security/cipher.py:14: error: Module 'openssl' has no attribute 'createCipher'  [attr-defined]\n"
+        "[08:56:11] src/auth/jwt.py:31: error: Argument 1 to 'CipherInstance' has incompatible type 'str'; expected 'bytes'  [arg-type]\n"
+        "[08:56:11] src/services/billing.py:47: error: Module 'openssl' has no attribute 'CipherContext'  [attr-defined]\n"
+        "[08:56:11]\n"
+        "[08:56:11] (openssl@3.4.0 type definitions removed deprecated symbols)\n"
+        "[08:56:11]\n"
+        "[08:56:11] Found 7 errors in 3 files (checked 87 source files)\n"
+        "[08:56:11] ##[error]Process completed with exit code 1."
+    ),
+]
 
 
 # ── SQL literal helpers ───────────────────────────────────────────────────────
@@ -230,6 +257,42 @@ def _step_id(pipeline_id: str, step_name: str, run_idx: int) -> str:
     return hashlib.md5(f"{pipeline_id}-{step_name}-{run_idx}".encode()).hexdigest()[:16]
 
 
+# ── Failure record builder ────────────────────────────────────────────────────
+
+def _build_failure(
+    cfg: OrgConfig,
+    ticket_key: str,
+    target_date: date,
+    run_idx: int,
+    step_name: str,
+    step_type: str,
+    log_text: str,
+    rng: random.Random,
+) -> dict:
+    """Build the per-failure dict consumed by the three INSERT builders."""
+    pipeline_run_idx = (run_idx % 2) + 1
+    pipeline_id = f"{cfg.org_name}-{ticket_key}-pipeline-{pipeline_run_idx}"
+    started = datetime.combine(target_date, datetime.min.time()) + timedelta(
+        hours=8 + (run_idx * 2) % 12,
+        minutes=rng.randint(0, 59),
+    )
+    finished = started + timedelta(minutes=rng.randint(2, 25))
+    commit_sha = hashlib.md5(f"{pipeline_id}-{step_name}-{run_idx}".encode()).hexdigest()
+    return {
+        "ticket_key":   ticket_key,
+        "pipeline_id":  pipeline_id,
+        "pipeline_name": f"{cfg.project_name}-pipeline",
+        "pipeline_url": f"{cfg.project_url}/actions/runs/{rng.randint(100000, 999999)}",
+        "step_id":      _step_id(pipeline_id, step_name, run_idx),
+        "step_name":    step_name,
+        "step_type":    step_type,
+        "started":      started,
+        "finished":     finished,
+        "commit_sha":   commit_sha,
+        "log_text":     log_text,
+    }
+
+
 # ── INSERT builders ───────────────────────────────────────────────────────────
 
 _PA_COLS = (
@@ -253,7 +316,6 @@ _LOGS_COLS = "job, logs, record_inserted_by"
 
 
 def _pa_values(cfg: OrgConfig, f: dict) -> str:
-    """One VALUES tuple for base_datasets.pipeline_activities."""
     return (
         "(" + ", ".join([
             _q("github"),                     # pipeline_source
@@ -261,30 +323,29 @@ def _pa_values(cfg: OrgConfig, f: dict) -> str:
             _q("main"),                       # branch
             _q(cfg.project_url),              # project_url
             _q(cfg.project_name),             # project_name
-            _q(f["pipeline_id"]),             # pipeline_id
-            _q(f["pipeline_name"]),           # pipeline_name
-            _q(f["pipeline_url"]),            # pipeline_url
-            _q(f["step_id"]),                 # step_id
+            _q(f["pipeline_id"]),
+            _q(f["pipeline_name"]),
+            _q(f["pipeline_url"]),
+            _q(f["step_id"]),
             _q("failure"),                    # step_conclusion
             _q("completed"),                  # step_status
-            _q(f["step_type"]),               # step_type
-            _q(f["step_name"]),               # step_name
+            _q(f["step_type"]),
+            _q(f["step_name"]),
             _ts(f["started"]),                # step_started_at
             _ts(f["finished"]),               # step_finished_at
             _q("failure"),                    # pipeline_status
             _ts(f["started"]),                # pipeline_started_at
             _ts(f["finished"]),               # pipeline_finished_at
-            _q(f["commit_sha"]),              # pipeline_commit_sha
+            _q(f["commit_sha"]),
             _q("push"),                       # pipeline_event_type
             _q(cfg.org_name),                 # customer_id
-            _q(RECORD_INSERTED_BY),           # record_inserted_by
-            _q("github"),                     # data_source
+            _q(RECORD_INSERTED_BY),
+            _q("github"),
         ]) + ")"
     )
 
 
 def _rpd_values(cfg: OrgConfig, f: dict) -> str:
-    """One VALUES tuple for user_working.repo_pipeline_details."""
     return (
         "(" + ", ".join([
             _q(f["pipeline_id"]),
@@ -292,14 +353,14 @@ def _rpd_values(cfg: OrgConfig, f: dict) -> str:
             _q(cfg.project_name),
             _q(f["pipeline_name"]),
             _q("failure"),                    # pipeline_status
-            _q(f["step_name"]),               # pipeline_step_name
+            _q(f["step_name"]),
             _q("failure"),                    # pipeline_step_conclusion
-            _ts(f["started"]),                # pipeline_started_at
-            _ts(f["finished"]),               # pipeline_finished_at
-            _q("main"),                       # pipeline_branch
-            _q(f["commit_sha"]),              # pipeline_commit_sha
-            _q(f["ticket_key"]),              # ticket_key
-            _q(RECORD_INSERTED_BY),           # record_inserted_by
+            _ts(f["started"]),
+            _ts(f["finished"]),
+            _q("main"),
+            _q(f["commit_sha"]),
+            _q(f["ticket_key"]),
+            _q(RECORD_INSERTED_BY),
         ]) + ")"
     )
 
@@ -335,46 +396,35 @@ def generate(catalog: str, cfg: OrgConfig, story: dict, today: date) -> dict:
       - "logs"
     """
     rng = random.Random(f"{cfg.org_name}-pipeline-failures")
+    recent = _recent_tickets(cfg, story, today)
 
-    # 3-5 distinct failure scenarios per recent ticket, sampled without replacement
     pa_vals, rpd_vals, log_vals = [], [], []
 
-    for ticket_key, ticket_date in _recent_tickets(cfg, story, today):
-        n = rng.randint(3, 5)
-        scenarios = rng.sample(_FAILURE_SCENARIOS, k=min(n, len(_FAILURE_SCENARIOS)))
+    def _record(f):
+        pa_vals.append(_pa_values(cfg, f))
+        rpd_vals.append(_rpd_values(cfg, f))
+        log_vals.append(_log_values(f))
 
-        for run_idx, (step_name, step_type) in enumerate(scenarios):
-            # Reuse a value_stream pipeline_id for this ticket so flow_row_count > 0
-            pipeline_run_idx = (run_idx % 2) + 1
-            pipeline_id = f"{cfg.org_name}-{ticket_key}-pipeline-{pipeline_run_idx}"
+    # ── Phase A: sporadic failures across the last 30 days ────────────────────
+    # One failure per recent ticket, dated to that ticket. Round-robin through
+    # the 4-step sporadic pool so each project gets all 4 step_names.
+    for idx, (ticket_key, ticket_date) in enumerate(recent):
+        step_name, step_type = _SPORADIC_FAILURE_SCENARIOS[idx % len(_SPORADIC_FAILURE_SCENARIOS)]
+        log_text = _SPORADIC_LOG_TEMPLATES[step_name]
+        _record(_build_failure(cfg, ticket_key, ticket_date, idx, step_name, step_type, log_text, rng))
 
-            started  = datetime.combine(ticket_date, datetime.min.time()) + timedelta(
-                hours=10 + run_idx * 2,
-                minutes=rng.randint(0, 59),
-            )
-            finished = started + timedelta(minutes=rng.randint(2, 25))
-            commit_sha = hashlib.md5(f"{pipeline_id}-{step_name}".encode()).hexdigest()
-
-            f = {
-                "ticket_key":   ticket_key,
-                "pipeline_id":  pipeline_id,
-                "pipeline_name": f"{cfg.project_name}-pipeline",
-                "pipeline_url": f"{cfg.project_url}/actions/runs/{rng.randint(100000, 999999)}",
-                "step_id":      _step_id(pipeline_id, step_name, run_idx),
-                "step_name":    step_name,
-                "step_type":    step_type,
-                "started":      started,
-                "finished":     finished,
-                "commit_sha":   commit_sha,
-                "log_text":     _LOG_TEMPLATES[step_name],
-            }
-
-            pa_vals.append(_pa_values(cfg, f))
-            rpd_vals.append(_rpd_values(cfg, f))
-            log_vals.append(_log_values(f))
+    # ── Phase B: today's narrative incident — openssl-3.4.0 auto-patch ────────
+    # All 6 themed step failures dated to `today`. Distributes across recent
+    # tickets via round-robin so different incident steps link to different
+    # tickets (and the ticket detail view shows the failed step alongside the
+    # rest of the issue's flow).
+    if recent:
+        for inc_idx, (step_name, step_type, log_text) in enumerate(_INCIDENT_SCENARIOS):
+            ticket_key, _td = recent[inc_idx % len(recent)]
+            _record(_build_failure(cfg, ticket_key, today, inc_idx, step_name, step_type, log_text, rng))
 
     return {
-        "pipeline_activities":  _make_inserts(catalog, "base_datasets.pipeline_activities",          _PA_COLS,   pa_vals),
-        "repo_pipeline_details": _make_inserts(catalog, "user_working.repo_pipeline_details",        _RPD_COLS,  rpd_vals),
+        "pipeline_activities":   _make_inserts(catalog, "base_datasets.pipeline_activities",          _PA_COLS,   pa_vals),
+        "repo_pipeline_details": _make_inserts(catalog, "user_working.repo_pipeline_details",         _RPD_COLS,  rpd_vals),
         "logs":                  _make_inserts(catalog, "user_working.github_offering_workflow_job_logs", _LOGS_COLS, log_vals),
     }

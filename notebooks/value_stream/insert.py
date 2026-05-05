@@ -6,7 +6,7 @@
 # Date window: rolling 1-year, comes from narrative.yaml (rewritten daily by
 # notebooks/insert.py).
 
-import sys, os, yaml
+import sys, os, re, yaml
 from datetime import date, timedelta
 
 # Module cache-bust — same pattern as direct/, dora/, meridian/ insert scripts
@@ -20,6 +20,23 @@ os.chdir("/tmp/seed-data")
 from generators import value_stream, pipeline_failures
 
 CATALOG = "playground_prod"
+
+# Self-refresh narrative.yaml to a rolling 1-year window ending today —
+# matches the logic in master notebooks/insert.py so this script works
+# correctly whether or not master was run first. The pipeline-failures
+# feature is sensitive to this: pipeline-failures.sql hardcodes
+# `pipeline_started_at >= DATE_SUB(CURRENT_DATE(), 30)`, so seeded rows
+# must align with the cluster's real "today" or they fall outside the window.
+_today = date.today()
+_start = _today - timedelta(days=365)
+_yaml_path = "/tmp/seed-data/config/stories/narrative.yaml"
+with open(_yaml_path) as _f:
+    _yaml = _f.read()
+_yaml = re.sub(r'^start_date: ".*"', f'start_date: "{_start.isoformat()}"', _yaml, flags=re.MULTILINE)
+_yaml = re.sub(r'^end_date: ".*"',   f'end_date: "{_today.isoformat()}"',   _yaml, flags=re.MULTILINE)
+with open(_yaml_path, "w") as _f:
+    _f.write(_yaml)
+print(f"Date window refreshed: {_start.isoformat()} -> {_today.isoformat()}")
 
 narrative = yaml.safe_load(open("config/stories/narrative.yaml"))
 
@@ -52,10 +69,10 @@ spark.sql(f"""
 # record_inserted_by = 'seed-data-value-stream' so it won't touch dora's data)
 # plus matching rows in repo_pipeline_details + github_offering_workflow_job_logs.
 #
-# `today` is the reference for the rolling 30-day failure window. Use
-# narrative end_date (which the master insert.py rewrites to date.today()
-# each run) so the failure dates line up with the seeded ticket dates and
-# fall within the SQL's `pipeline_started_at >= DATE_SUB(CURRENT_DATE(), 30)`.
+# `today` is the reference for the rolling 30-day failure window AND the
+# anchor for the "today's narrative incident" cluster. We use the
+# narrative end_date (just rewritten to date.today() above) so failure
+# dates line up exactly with the seeded ticket dates.
 
 today = date.fromisoformat(narrative["end_date"])
 
