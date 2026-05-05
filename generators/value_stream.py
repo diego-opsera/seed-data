@@ -104,8 +104,12 @@ MERIDIAN = OrgConfig(
 )
 
 
-# Pipeline stage steps: one per stage type, names match all 6 LIKE filters
+# Pipeline stage steps: one per stage type, names match the 7 LIKE filters
+# in vnxt-insights-api/src/controllers/insights/value-stream.controller.js
+# (STAGE_FILTERS constant + issue-stream-list.sql).
+# Order matches the canonical CI/CD flow: review → build → security → quality → test → deploy → prod.
 _STAGE_STEPS = [
+    ("review",     "code-review"),
     ("build",      "build-and-test"),
     ("security",   "security-scan"),
     ("quality",    "sonar-quality"),
