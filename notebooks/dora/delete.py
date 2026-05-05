@@ -82,9 +82,18 @@ try:
 except Exception as e:
     print(f"filter_values_unity: ERROR — {e}")
 
-# ── raw_jira_boards_ci (underlies jira_boards view, board_id=1 is ours) ───────
+# ── raw_jira_boards_ci (underlies jira_boards view) ──────────────────────────
+# Scoped by both board_id AND org_name to match the insert exactly — board_id
+# alone is too loose (a real customer could happen to use board_id=1).
 try:
-    spark.sql(f"DELETE FROM {CATALOG}.source_to_stage.raw_jira_boards_ci WHERE board_id = 1")
-    print("raw_jira_boards_ci: board_id=1 deleted")
+    n = spark.sql(f"""
+        SELECT COUNT(*) FROM {CATALOG}.source_to_stage.raw_jira_boards_ci
+        WHERE board_id = 1 AND org_name = 'demo-acme-direct'
+    """).collect()[0][0]
+    spark.sql(f"""
+        DELETE FROM {CATALOG}.source_to_stage.raw_jira_boards_ci
+        WHERE board_id = 1 AND org_name = 'demo-acme-direct'
+    """)
+    print(f"raw_jira_boards_ci: deleted {n} row(s) with board_id=1, org_name='demo-acme-direct'")
 except Exception as e:
     print(f"raw_jira_boards_ci: ERROR — {e}")
