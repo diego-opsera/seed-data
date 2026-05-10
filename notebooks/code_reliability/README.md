@@ -95,24 +95,34 @@ Specific `project_name` array values needed (all driven by the source-table colu
 
 ---
 
-## File layout (target)
+## File layout
 
 ```
 generators/
-  asp_sonar_measures.py           NEW — Acme + Meridian
-  asp_sonar_issues.py             NEW — Acme + Meridian
-  twistlock_security_issues.py    NEW — Acme + Meridian
-  invicti_was.py                  NEW — emits both raw_invicti_data + raw_invicti_all_issues
-  dependabot_scan_alert.py        NEW — Acme + Meridian
+  dependabot_scan_alert.py        ✓ done — Acme + Meridian
+  asp_sonar_measures.py           TODO
+  asp_sonar_issues.py             TODO
+  twistlock_security_issues.py    TODO
+  invicti_was.py                  TODO — emits raw_invicti_data; raw_invicti_all_issues missing in PG
 notebooks/code_reliability/
   README.md                       (this file)
   diag_cr_1.py                    schema + counts + samples for all 6 missing tables
   diag_cr_2.py                    filter_groups_unity wiring check (project_name coverage)
-  insert.py                       runs all 5 generators + adds filter rows
-  delete.py                       scoped DELETE for all 5 tables
-notebooks/insert.py               ADD: run("code_reliability/insert.py") after value_stream
-notebooks/delete.py               ADD: run("code_reliability/delete.py") before value_stream (reverse order)
+  diag_cr_3_dependabot.py         focused dependabot schema + null-rate inspection
+  insert.py                       ✓ unified insert — loops over both orgs, calls each generator
+  delete.py                       ✓ unified delete — scoped per table, both orgs
+notebooks/insert.py               ✓ wired — run("code_reliability/insert.py") as step 8
+notebooks/delete.py               ✓ wired — run("code_reliability/delete.py") as step 1 reverse
 ```
+
+**Convention:** all Code Reliability work lives in `code_reliability/` and seeds
+BOTH demo orgs from a single insert script (value_stream pattern). New tables
+get added by appending a generator import + entry to the `GENERATORS` list in
+`insert.py`, and a `(table, predicate)` row to `delete.py`.
+
+`code_scan_alert` and `secret_scan_alert` remain in `direct/` + `meridian/`
+because they predate this dashboard and feed older charts too — leaving them
+in place to avoid churn on working code.
 
 ---
 

@@ -15,7 +15,7 @@ from generators import (
     release_mgmt_meridian,
     direct_data, seats_usage, org_mapping,
     ide_org_level, ai_assistant_acceptance, ai_usage_user_level,
-    copilot_billing, code_scan_alert, secret_scan_alert, dependabot_scan_alert,
+    copilot_billing, code_scan_alert, secret_scan_alert,
 )
 
 CATALOG = "playground_prod"
@@ -97,7 +97,6 @@ direct_statements += [(ai_usage_user_level.TABLE,     s) for s in ai_usage_user_
 direct_statements += [(copilot_billing.TABLE,         s) for s in copilot_billing.generate(CATALOG, entities_meridian, meridian_story)]
 direct_statements += [(code_scan_alert.TABLE,         s) for s in code_scan_alert.generate(CATALOG, entities_meridian, meridian_story)]
 direct_statements += [(secret_scan_alert.TABLE,       s) for s in secret_scan_alert.generate(CATALOG, entities_meridian, meridian_story)]
-direct_statements += [(dependabot_scan_alert.TABLE,   s) for s in dependabot_scan_alert.generate(CATALOG, entities_meridian, meridian_story)]
 
 for i, (table, sql) in enumerate(direct_statements, 1):
     print(f"[Direct {i}/{len(direct_statements)}] {table}...", end=" ")

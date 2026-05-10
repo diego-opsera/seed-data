@@ -58,6 +58,11 @@ run("snaplogic/insert.py")
 #    Seeds rows for BOTH demo-acme-direct and demo-meridian.
 run("value_stream/insert.py")
 
+# 8. code_reliability — dashboard at /insights/v2/code-reliability
+#    Self-contained, seeds BOTH orgs in one place. Add new generators here as
+#    we build them (sonar, twistlock, was, etc.).
+run("code_reliability/insert.py")
+
 print("\n" + "="*60)
 print("  MASTER INSERT COMPLETE")
 print("="*60)

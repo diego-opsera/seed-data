@@ -11,7 +11,7 @@ CATALOG = "playground_prod"
 #                                                raw_github_copilot_billing, github_copilot_orgs_mapping,
 #                                                github_copilot_metrics_ide_org_level,
 #                                                ai_code_assistant_usage_user_level)
-#   organization = 'demo-meridian'              (code_scan_alert, secret_scan_alert, dependabot_scan_alert)
+#   organization = 'demo-meridian'              (code_scan_alert, secret_scan_alert)
 #   level_name = 'demo-meridian'                (ai_assistant_acceptance_info)
 #
 # Filter config:
@@ -45,8 +45,6 @@ _deletes = [
     ("base_datasets.code_scan_alert",
      "organization = 'demo-meridian'"),
     ("base_datasets.secret_scan_alert",
-     "organization = 'demo-meridian'"),
-    ("base_datasets.dependabot_scan_alert",
      "organization = 'demo-meridian'"),
     ("consumption_layer.ai_code_assistant_usage_user_level",
      "org_name = 'demo-meridian'"),

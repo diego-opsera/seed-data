@@ -14,7 +14,10 @@ def run(path):
     exec(open(f"{BASE}/{path}").read(), globals())
 
 # Reverse of insert order
-# 1. value_stream — Issue Stream / Flow View fact table (self-contained, no deps)
+# 1. code_reliability — Code Reliability dashboard tables (Acme + Meridian)
+run("code_reliability/delete.py")
+
+# 2. value_stream — Issue Stream / Flow View fact table (self-contained, no deps)
 run("value_stream/delete.py")
 
 # 2. snaplogic

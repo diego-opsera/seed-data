@@ -29,7 +29,6 @@ org_name_tables = [
 organization_tables = [
     ("base_datasets",   "code_scan_alert"),
     ("base_datasets",   "secret_scan_alert"),
-    ("base_datasets",   "dependabot_scan_alert"),
 ]
 
 # consumption_layer tables
