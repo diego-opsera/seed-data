@@ -27,6 +27,9 @@ _deletes = [
     # base_datasets.asp_sonar_measures view. Same scope tag.
     ("source_to_stage.raw_sonar_metric_split_data_branchwise",
      "record_inserted_by IN ('seed-data', 'seed-data-meridian')"),
+    # twistlock_security_issues — managed table; scope by record_inserted_by
+    ("base_datasets.twistlock_security_issues",
+     "record_inserted_by IN ('seed-data', 'seed-data-meridian')"),
 ]
 
 for table, predicate in _deletes:

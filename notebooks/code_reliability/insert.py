@@ -21,7 +21,7 @@ for _key in list(sys.modules.keys()):
 sys.path.insert(0, "/tmp/seed-data")
 os.chdir("/tmp/seed-data")
 
-from generators import dependabot_scan_alert, asp_sonar_issues, asp_sonar_measures
+from generators import dependabot_scan_alert, asp_sonar_issues, asp_sonar_measures, twistlock_security_issues
 
 CATALOG = "playground_prod"
 
@@ -71,9 +71,10 @@ ORG_CONFIGS = [
 # Add new generators (sonar, twistlock, was) below as we build them.
 
 GENERATORS = [
-    ("dependabot_scan_alert", dependabot_scan_alert),
-    ("asp_sonar_issues",      asp_sonar_issues),
-    ("asp_sonar_measures",    asp_sonar_measures),
+    ("dependabot_scan_alert",     dependabot_scan_alert),
+    ("asp_sonar_issues",          asp_sonar_issues),
+    ("asp_sonar_measures",        asp_sonar_measures),
+    ("twistlock_security_issues", twistlock_security_issues),
 ]
 
 # ── Execute ────────────────────────────────────────────────────────────────────
@@ -254,6 +255,16 @@ spark.sql(f"""
     WHERE m.record_inserted_by IN ('seed-data', 'seed-data-meridian')
     GROUP BY m.org_name, m.project_name
     ORDER BY m.org_name, m.project_name
+""").show(50, truncate=False)
+
+print(f"\n{'─'*60}\n  VERIFY: twistlock_security_issues by project + severity\n{'─'*60}")
+spark.sql(f"""
+    SELECT project_name, severity, COUNT(*) AS n_components,
+           SUM(size(cve)) AS n_cves
+    FROM {CATALOG}.base_datasets.twistlock_security_issues
+    WHERE record_inserted_by IN ('seed-data', 'seed-data-meridian')
+    GROUP BY project_name, severity
+    ORDER BY project_name, severity
 """).show(50, truncate=False)
 
 print(f"\n{'─'*60}\n  VERIFY: filter_values_unity rows we just inserted\n{'─'*60}")
