@@ -31,20 +31,25 @@ run("dora/insert.py")
 #    (CTFC itsm dependency is at API query time, not insert time)
 run("devex/insert.py")
 
-# 5. release_mgmt — release management (fix_version LIKE 'demo-%')
+# 5. meridian — Meridian Analytics org: DORA, copilot, devex, CRs, releases,
+#    filter groups, raw_jira_boards_ci. Independent filter_group_id so it
+#    doesn't conflict with Acme's wiring.
+run("meridian/insert.py")
+
+# 6. release_mgmt — Acme release management (fix_version LIKE 'demo-%')
 run("release_mgmt/insert.py")
 
-# 6. snaplogic — SnapLogic integration data (org=demo-acme-direct)
+# 7. snaplogic — SnapLogic integration data (org=demo-acme-direct)
 run("snaplogic/insert.py")
 
-# 7. value_stream — Issue Stream / Flow View denormalized fact table
+# 8. value_stream — Issue Stream / Flow View denormalized fact table
 #    Self-contained — generates fresh data, no dependency on other batches' tables.
 #    Seeds rows for BOTH demo-acme-direct and demo-meridian.
 run("value_stream/insert.py")
 
-# 8. code_reliability — dashboard at /insights/v2/code-reliability
-#    Self-contained, seeds BOTH orgs in one place. Add new generators here as
-#    we build them (sonar, twistlock, was, etc.).
+# 9. code_reliability — dashboard at /insights/v2/code-reliability
+#    Self-contained, seeds BOTH orgs in one place (sonar, twistlock, WAS,
+#    git custodian, JUnit, dependabot).
 run("code_reliability/insert.py")
 
 print("\n" + "="*60)

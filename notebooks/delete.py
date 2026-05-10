@@ -20,22 +20,26 @@ run("code_reliability/delete.py")
 # 2. value_stream — Issue Stream / Flow View fact table (self-contained, no deps)
 run("value_stream/delete.py")
 
-# 2. snaplogic
+# 3. snaplogic
 run("snaplogic/delete.py")
 
-# 3. release_mgmt
+# 4. release_mgmt
 run("release_mgmt/delete.py")
 
-# 4. devex — delete devex filter values before dora deletes the filter group
+# 5. meridian — Meridian Analytics rows (DORA, copilot, devex, CRs, releases,
+#    filter group, jira board). Cleans its own filter_values + filter_group.
+run("meridian/delete.py")
+
+# 6. devex — delete devex filter values before dora deletes the filter group
 run("devex/delete.py")
 
-# 5. dora — deletes the filter group itself (after devex values are already gone)
+# 7. dora — deletes the filter group itself (after devex values are already gone)
 run("dora/delete.py")
 
-# 6. direct
+# 8. direct
 run("direct/delete.py")
 
-# 7. core
+# 9. core
 run("core/delete.py")
 
 print("\n" + "="*60)

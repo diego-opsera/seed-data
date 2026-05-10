@@ -27,17 +27,25 @@ import yaml
 # ---------------------------------------------------------------------------
 
 # (days_before_today_inclusive_max, days_before_today_inclusive_min)
-# Anchored so today=2026-05-10 reproduces the original dates we used.
+#
+# All Acme incident windows are anchored to ONE incident date — the production
+# incident on Wed Mar 18 (offset 53). The security-alert spike, the
+# suppressed-work week, and the hotfix recovery are all aligned around it.
+#
+# Today (2026-05-10) - 53 days = Mar 18 = dora.py _INC. Mirroring snapLogic.
 EVENT_OFFSETS = {
-    # Acme primary SEV1 weekend (peak ~64-66 days back from today)
-    "acme_primary_spike":   (66, 61),
-    # Broader Acme spike window — used by Sonar/JUnit/GitCustodian for slow-rising metrics
-    "acme_spike_broad":     (69, 55),
-    # Acme secondary spike (~24 weeks before today)
+    # Primary spike: alert volume rises Mon, peaks on incident Wed, tapers
+    # through Sat. Spans Mar 16-21 (the incident week + the following Sat).
+    "acme_primary_spike":   (55, 50),
+    # Broader spike window for slow-rising metrics (Sonar / JUnit / GitCustodian
+    # pass-rate dips). Encompasses the lead-in week + incident + hotfix.
+    "acme_spike_broad":     (58, 46),
+    # Earlier "warning" incident (~24 weeks before today). Smaller magnitude —
+    # the company didn't fully address it, leading to the bigger SEV1 in March.
     "acme_secondary_spike": (174, 167),
-    # Mid-spike production incident week (suppressed activity)
+    # Production incident week — suppressed activity (devs in war-room)
     "acme_incident_week":   (55, 51),
-    # Hotfix recovery week after incident
+    # Hotfix recovery week after incident — surge of emergency commits/PRs
     "acme_hotfix_week":     (48, 46),
     # Vacation periods (~Thanksgiving wk + ~December break)
     "vacation_thanksgiving":(167, 163),
@@ -46,17 +54,18 @@ EVENT_OFFSETS = {
 
 # Per-day spike volume profiles for code_scan_alert / secret_scan_alert /
 # dependabot_scan_alert. Maps days-before-today → alerts-emitted-that-day.
-# Anchored so today=2026-05-10 reproduces Mar 5-10 + Nov 17-20 patterns.
+# Peak on incident day (offset 53 = Mar 18 when run today=2026-05-10).
+# Lead-in Mon-Tue, peak Wed (incident strikes), taper Thu-Sat.
 ACME_CODE_SCAN_SPIKE_VOLUMES = {
-    66: 4, 65: 6, 64: 10, 63: 8, 62: 6, 61: 3,         # primary (Mar 5-10)
-    174: 2, 173: 5, 172: 3, 171: 2,                     # secondary (Nov 17-20)
+    55: 4, 54: 6, 53: 10, 52: 8, 51: 6, 50: 3,         # incident week + Sat
+    174: 2, 173: 5, 172: 3, 171: 2,                     # secondary spike
 }
 ACME_SECRET_SCAN_SPIKE_VOLUMES = {
-    66: 2, 65: 3, 64: 5, 63: 4, 62: 3, 61: 1,
+    55: 2, 54: 3, 53: 5, 52: 4, 51: 3, 50: 1,
     174: 1, 173: 3, 172: 2, 171: 1,
 }
 ACME_DEPENDABOT_SPIKE_VOLUMES = {
-    66: 3, 65: 4, 64: 7, 63: 6, 62: 4, 61: 2,
+    55: 3, 54: 4, 53: 7, 52: 6, 51: 4, 50: 2,
     174: 1, 173: 4, 172: 2, 171: 1,
 }
 
