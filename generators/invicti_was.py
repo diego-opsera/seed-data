@@ -169,6 +169,11 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
         initiated_iso = _initiated_iso(scan_dt)
         state_changed_iso = _initiated_iso(end_dt)
 
+        # InitiatedTime + InitiatedDate use dd/MM/yyyy (matches the SQL's
+        # to_timestamp(..., 'dd/MM/yyyy hh:mm a') format). AM/PM uppercase.
+        initiated_time_str = scan_dt.strftime('%d/%m/%Y %I:%M %p')
+        initiated_date_str = scan_day.strftime('%d/%m/%Y')
+
         value_lines.append(
             "  ("
             f"{_sql_val(scan_id)}, {_sql_val(project)}, {_sql_val(website_url)}, {_sql_val(website_id)}, "
@@ -183,8 +188,8 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
             f"{_sql_val(str(counts['info']))}, {_sql_val(str(counts['best_practice']))}, "
             f"{_sql_val(str(total_vulns))}, "
             f"{_sql_val(initiated_iso)}, {_sql_val(initiated_iso)}, "
-            f"{_sql_val(scan_day.strftime('%m/%d/%Y'))}, "
-            f"{_sql_val(scan_dt.strftime('%m/%d/%Y %I:%M %p'))}, "
+            f"{_sql_val(initiated_date_str)}, "
+            f"{_sql_val(initiated_time_str)}, "
             f"{_sql_val(state_changed_iso)}, "
             f"{_sql_val(duration)}, {_sql_val('48')}, "
             f"{_sql_val('Default Security Checks')}, {_sql_val('Default Report Policy')}, "
@@ -201,8 +206,10 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
         # per counted critical/high/medium/low vuln, plus a couple of info/
         # best-practice rows that the SQL will exclude (so the data looks
         # realistic without breaking the filter).
-        seen_dt_str = scan_dt.strftime("%d/%m/%Y %I:%M %p").lower()
-        first_seen = (scan_dt - timedelta(days=rng.randint(7, 60))).strftime("%d/%m/%Y %I:%M %p").lower()
+        # Format MUST match the SQL's to_timestamp(..., 'dd/MM/yyyy hh:mm a').
+        # Day first, AM/PM uppercase. NOT lowercased.
+        seen_dt_str = scan_dt.strftime("%d/%m/%Y %I:%M %p")
+        first_seen  = (scan_dt - timedelta(days=rng.randint(7, 60))).strftime("%d/%m/%Y %I:%M %p")
 
         per_severity = [
             ("Critical", counts["critical"]),
