@@ -267,18 +267,21 @@ for org_name, projects in SONAR_PROJECTS.items():
             sort_number=24,
         )
     # JUnit Insights filters by project_url (matches git_url in the source row).
-    # Pull the actual html_url from entities so the JOIN hits exactly
-    # what the junit generator emits (no .git suffix).
+    # MUST end with .git — that's what the flattened view surfaces (DORA wires
+    # .git URLs and the view unions across the filter_group). The junit SQL
+    # does an exact string match on git_url = project_url, so generator and
+    # filter must agree.
     if JUNIT_KPIS:
         _entities_for_org = {
             "demo-acme-direct": entities_acme,
             "demo-meridian":    entities_meridian,
         }[org_name]
-        junit_urls = [
-            (r.get("html_url") or f"https://github.com/{r['name']}").rstrip("/")
-            .removesuffix(".git")
-            for r in _entities_for_org["repos"]
-        ]
+        junit_urls = []
+        for r in _entities_for_org["repos"]:
+            u = (r.get("html_url") or f"https://github.com/{r['name']}").rstrip("/")
+            if not u.endswith(".git"):
+                u = u + ".git"
+            junit_urls.append(u)
         _insert_filter_value(
             fg_id, tool_type='github', filter_name='project_url',
             values=junit_urls, kpi_uuids=JUNIT_KPIS,

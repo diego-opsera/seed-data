@@ -93,10 +93,13 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
     for repo in repos:
         full_name  = repo["name"]                       # demo-acme-direct/backend
         repository = full_name.split("/", 1)[-1]
-        # Match what's wired in filter_values_unity.project_url (no .git)
-        git_url    = repo.get("html_url", f"https://github.com/{full_name}")
-        if git_url.endswith(".git"):
-            git_url = git_url[:-4]
+        # The flattened view's project_url array surfaces .git-suffixed URLs
+        # (DORA wiring populates with .git, and the view unions URLs across
+        # the filter_group). The junit SQL JOIN is exact-match `git_url =
+        # project_url`, so emit WITH .git to match.
+        git_url = repo.get("html_url", f"https://github.com/{full_name}")
+        if not git_url.endswith(".git"):
+            git_url = git_url + ".git"
 
         pipeline_id   = _stable_oid("pipeline", org_name, repository)
         pipeline_name = f"{org_name}/{repository}"
