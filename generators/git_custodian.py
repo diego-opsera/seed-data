@@ -8,7 +8,7 @@ Drives the Git Custodian widget on the Code Reliability dashboard. The SQL
    ⋈ filter_groups (on pipelineName / branch / pipeline_tags)
    ⋈ raw_mongo_transformed_data_gitscraper_issues i (on s._id = i._id)
 
-Per project: weekly scans over the last ~90 days, each with a small
+Per project: weekly scans across the full story window, each with a small
 number of secret-scanning issues. Issue counts trend DOWN over time so the
 widget's "current vs previous" period diff shows resolution progress.
 
@@ -131,10 +131,11 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
     if not user_logins:
         user_logins = [f"{org_name}-bot"]
 
-    # Weekly scans over the last 90 days (rolling window)
+    # Weekly scans across the FULL story window (rolling 1-year ending today),
+    # snapped to Mondays. Lets the trend chart show the November spike +
+    # Meridian's pre/post-Opsera inflection.
     scan_days = []
-    d = end - timedelta(days=90)
-    # Snap to the next Monday
+    d = start
     while d.weekday() != 0:
         d += timedelta(days=1)
     while d <= end:

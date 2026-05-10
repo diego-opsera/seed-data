@@ -6,7 +6,7 @@ Drives the JUnit Insights widget on the Code Reliability dashboard. SQL
 (already wired for our orgs from DORA work). Per time bucket the widget
 sums passed/failed/errored/skipped test counts.
 
-Per project: weekly test runs over the last ~90 days. Counts shift by
+Per project: weekly test runs across the full story window. Counts shift by
 org phase:
   Acme    : ~95% pass baseline; March/Nov spikes drop to ~70% pass
   Meridian: pre-Opsera ~70% pass → post-Opsera ~95% pass
@@ -79,9 +79,11 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
     if not repos:
         return []
 
-    # Weekly scans over the last 90 days, snapped to Mondays
+    # Weekly scans across the FULL story window (rolling 1-year ending today),
+    # snapped to Mondays. This makes the Nov spike + Meridian t=0.5 inflection
+    # visible in the trend chart.
     scan_days = []
-    d = end - timedelta(days=90)
+    d = start
     while d.weekday() != 0:
         d += timedelta(days=1)
     while d <= end:
