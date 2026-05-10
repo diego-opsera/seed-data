@@ -61,6 +61,7 @@ VALUES
 INSERT_SQL = """\
 INSERT INTO {catalog}.source_to_stage.raw_invicti_data
   (Id, WebsiteName, WebsiteUrl, WebsiteId,
+   TargetUrl, TargetPath,
    State, Phase, IsCompleted, Percentage, ScanType,
    ThreatLevel, GlobalThreatLevel,
    VulnerabilityCriticalCount, VulnerabilityHighCount,
@@ -177,6 +178,9 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
         value_lines.append(
             "  ("
             f"{_sql_val(scan_id)}, {_sql_val(project)}, {_sql_val(website_url)}, {_sql_val(website_id)}, "
+            # TargetUrl + TargetPath — the dashboard widget builds
+            # path_url = CONCAT(TargetUrl, TargetPath) and filters out empty.
+            f"{_sql_val(website_url)}, {_sql_val('/')}, "
             f"{_sql_val('Complete')}, {_sql_val('Complete')}, {_sql_val('true')}, {_sql_val('100')}, {_sql_val('Full')}, "
             f"{_sql_val(threat_level)}, {_sql_val(threat_level)}, "
             f"{_sql_val(str(counts['critical']))}, {_sql_val(str(counts['high']))}, "

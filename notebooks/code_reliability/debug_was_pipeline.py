@@ -100,7 +100,7 @@ out("final.acme", rows(f"""
     ),
     source AS (
         SELECT DISTINCT WebsiteId, WebsiteName, WebsiteUrl, TargetUrl, TargetPath,
-                        CONCAT(COALESCE(TargetUrl, ''), COALESCE(TargetPath, '')) AS path_url,
+                        CONCAT(TargetUrl, TargetPath) AS path_url,
                         State, InitiatedTime, InitiatedAt, ThreatLevel
         FROM {CATALOG}.source_to_stage.raw_invicti_data s
         JOIN filter_groups f ON array_contains(f.project_name, WebsiteName) IS TRUE
