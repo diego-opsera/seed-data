@@ -85,13 +85,13 @@ def _coverage_pct(org_name: str, scan_day: date, story: dict, start: date, end: 
             base = lerp(65.0, 80.0, (t - 0.5) / 0.5)
     else:
         base = 76.0
-        # Spike windows dip coverage as devs rush hotfixes (less test coverage on patches)
+        # Spike windows dip coverage as devs rush hotfixes (less test coverage on patches).
+        # Windows come from story["events"] (anchored to today).
         if story.get("security_spikes", False):
-            in_march_spike = date(2026, 3, 2)  <= scan_day <= date(2026, 3, 16)
-            in_nov_spike   = date(2025, 11, 17) <= scan_day <= date(2025, 11, 24)
-            if in_march_spike:
+            events = story.get("events", {})
+            if scan_day in events.get("acme_spike_broad", frozenset()):
                 base = 56.0
-            elif in_nov_spike:
+            elif scan_day in events.get("acme_secondary_spike", frozenset()):
                 base = 66.0
     return round(base + rng.uniform(-2.0, 2.0), 1)
 
@@ -115,11 +115,12 @@ def _rating_for_phase(org_name: str, scan_day: date, story: dict, start: date, e
             return "1.0"
 
     # Acme baseline: A/B; spikes elevate security rating
-    in_march_spike = date(2026, 3, 2)  <= scan_day <= date(2026, 3, 16)
-    in_nov_spike   = date(2025, 11, 17) <= scan_day <= date(2025, 11, 24)
-    if story.get("security_spikes", False) and (in_march_spike or in_nov_spike):
+    events = story.get("events", {})
+    in_primary  = scan_day in events.get("acme_spike_broad", frozenset())
+    in_secondary = scan_day in events.get("acme_secondary_spike", frozenset())
+    if story.get("security_spikes", False) and (in_primary or in_secondary):
         if category == "security":
-            return "4.0" if in_march_spike else "3.0"
+            return "4.0" if in_primary else "3.0"
         return "2.0"
     return "2.0" if category == "maintainability" else "1.0"
 

@@ -21,20 +21,8 @@ VALUES
 # Secrets tend to be high/critical severity
 _SEVERITIES = ["critical", "high", "high", "medium", "medium", "low"]
 
-# Spike overrides for the Acme incident story — mirrors code_scan at ~half the volume.
-# Applied only when story["security_spikes"] is True.
-_SPIKE_DAYS = {
-    date(2026, 3, 5):   2,
-    date(2026, 3, 6):   3,
-    date(2026, 3, 7):   5,   # SEV1 peak
-    date(2026, 3, 8):   4,
-    date(2026, 3, 9):   3,
-    date(2026, 3, 10):  1,
-    date(2025, 11, 17): 1,
-    date(2025, 11, 18): 3,   # secondary peak
-    date(2025, 11, 19): 2,
-    date(2025, 11, 20): 1,
-}
+# Spike volumes sourced from story["events"]["acme_secret_scan_spike_volumes"]
+# — anchored relative to today via generators.utils.ACME_SECRET_SCAN_SPIKE_VOLUMES.
 
 
 def generate(catalog: str, entities: dict, story: dict) -> list[str]:
@@ -49,7 +37,8 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
     if len(team_names) >= 2:
         teams_pool.append(team_names)
 
-    spike_days = _SPIKE_DAYS if story.get("security_spikes", False) else {}
+    spike_days = (story.get("events", {}).get("acme_secret_scan_spike_volumes", {})
+                  if story.get("security_spikes", False) else {})
 
     alert_counter = 5001
     value_lines = []

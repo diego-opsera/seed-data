@@ -30,16 +30,10 @@ user_count_daily_abs_noise: 8
 weekend_multiplier: 0.0
 holiday_multiplier: 0.05
 
-# Emergency weekend: on-call incident 3 weeks back
-emergency_weekend_start: "2026-03-07"
+# Emergency weekend (SEV1) and vacation periods are NOT defined here — they're
+# computed from generators.utils.EVENT_OFFSETS at story-load time so they
+# always sit at the same point in the rolling 1-year window relative to today.
 emergency_weekend_multiplier: 0.25
-
-# Full vacation shutdowns
-vacation_periods:
-  - start: "2025-11-24"
-    end:   "2025-11-28"   # Thanksgiving week (Mon–Fri)
-  - start: "2025-12-22"
-    end:   "2025-12-31"   # Final two weeks of December
 
 # IDE assignment for named users (auto-generated users get distributed by index)
 user_ide_map:

@@ -23,22 +23,9 @@ VALUES
 # Weighted toward medium/high — realistic GHAS distribution
 _SEVERITIES = ["critical", "high", "high", "medium", "medium", "medium", "low", "warning", "note"]
 
-# Spike overrides for the Acme incident story.
-# Applied only when story["security_spikes"] is True.
-# Weekend days are normally skipped but included here for the outage window.
-# Nov 18 peak is ~50% of the March peak.
-_SPIKE_DAYS = {
-    date(2026, 3, 5):   4,   # Thu — alert volume rising
-    date(2026, 3, 6):   6,   # Fri — escalation
-    date(2026, 3, 7):  10,   # Sat — SEV1 peak (emergency weekend)
-    date(2026, 3, 8):   8,   # Sun — SEV1 peak
-    date(2026, 3, 9):   6,   # Mon — still elevated
-    date(2026, 3, 10):  3,   # Tue — tapering off
-    date(2025, 11, 17): 2,   # Mon — secondary incident buildup
-    date(2025, 11, 18): 5,   # Tue — secondary peak (~50% of March)
-    date(2025, 11, 19): 3,   # Wed — tapering
-    date(2025, 11, 20): 2,   # Thu — tapering
-}
+# Spike volumes per day are sourced from story["events"][
+# "acme_code_scan_spike_volumes"] — anchored relative to today via
+# generators.utils.ACME_CODE_SCAN_SPIKE_VOLUMES (days-before-today → count).
 
 
 def generate(catalog: str, entities: dict, story: dict) -> list[str]:
@@ -53,7 +40,8 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
     if len(team_names) >= 2:
         teams_pool.append(team_names)
 
-    spike_days = _SPIKE_DAYS if story.get("security_spikes", False) else {}
+    spike_days = (story.get("events", {}).get("acme_code_scan_spike_volumes", {})
+                  if story.get("security_spikes", False) else {})
 
     alert_counter = 10001
     value_lines = []

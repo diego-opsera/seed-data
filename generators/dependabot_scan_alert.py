@@ -70,21 +70,8 @@ _CVE_CATALOGUE = [
     ("composer", "symfony/http-kernel",  "GHSA-q3r4-x4qw-hqjr", "CVE-2024-50342", "medium",   "Symfony http-kernel cookie parsing inconsistency", "< 6.4.18",  "6.4.18",  "CWE-444", "HTTP Request/Response Smuggling"),
 ]
 
-# Spike overrides for the Acme incident story — mirrors code_scan_alert pattern.
-# Dependabot volume during a security spike is roughly 70% of code_scan_alert's
-# (vulns surface as advisories drop; not every code-scan finding has a CVE).
-_SPIKE_DAYS = {
-    date(2026, 3, 5):   3,   # Thu
-    date(2026, 3, 6):   4,   # Fri
-    date(2026, 3, 7):   7,   # Sat — SEV1 peak
-    date(2026, 3, 8):   6,   # Sun — SEV1 peak
-    date(2026, 3, 9):   4,   # Mon
-    date(2026, 3, 10):  2,   # Tue — tapering
-    date(2025, 11, 17): 1,   # Mon — secondary buildup
-    date(2025, 11, 18): 4,   # Tue — secondary peak
-    date(2025, 11, 19): 2,   # Wed
-    date(2025, 11, 20): 1,   # Thu
-}
+# Spike volumes sourced from story["events"]["acme_dependabot_spike_volumes"]
+# — anchored relative to today via generators.utils.ACME_DEPENDABOT_SPIKE_VOLUMES.
 
 
 def _iso_z(dt: datetime) -> str:
@@ -119,7 +106,8 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
         user_logins = [f"{org_name}-bot"]
 
     is_meridian = (org_name == "demo-meridian")
-    spike_days = _SPIKE_DAYS if story.get("security_spikes", False) else {}
+    spike_days = (story.get("events", {}).get("acme_dependabot_spike_volumes", {})
+                  if story.get("security_spikes", False) else {})
 
     # Meridian pre/post-Opsera inflection at t=0.5 — pre-phase has heavier
     # alert volume (manual dep mgmt, slower fixes), post-phase ramps down

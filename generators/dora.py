@@ -52,10 +52,16 @@ _N = len(_MONTHS) - 1
 _MON = {1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"May",6:"Jun",
         7:"Jul",8:"Aug",9:"Sep",10:"Oct",11:"Nov",12:"Dec"}
 
-_D0   = date(2025, 4, 1)
-_D1   = date(2026, 3, 31)
+# Story window + incident anchor — computed at module-load time relative to
+# today so the demo always shows the same arc regardless of calendar date.
+# load_story() in utils.py uses the same rolling 1-year window.
+# _INC is anchored ~53 days before today (matches utils.EVENT_OFFSETS for the
+# Acme incident week midpoint).
+_TODAY = date.today()
+_D0   = _TODAY - timedelta(days=365)
+_D1   = _TODAY
 _SPAN = (_D1 - _D0).days
-_INC  = date(2026, 3, 18)      # incident date — mirrors SnapLogic scenario
+_INC  = _TODAY - timedelta(days=53)
 
 # ── DORA thresholds ───────────────────────────────────────────────────────────
 # Based on DORA 2024 industry benchmarks.

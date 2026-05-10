@@ -199,16 +199,15 @@ def _counts_for_scan(org_name: str, scan_day: date, story: dict, start: date, en
                 "VULNERABILITY": int(round(lerp(3,   1, local_t))),
             }
 
-    # Acme — steady baseline with optional March-2026 + Nov-2025 vuln spike
+    # Acme — steady baseline with optional primary + secondary vuln spike.
+    # Windows come from story["events"] (anchored to today).
     base = {"CODE_SMELL": 50, "BUG": 12, "VULNERABILITY": 3}
     if story.get("security_spikes", False):
-        # Spike weeks bump VULNERABILITY count (+ slight BUG bump).
-        in_march_spike = date(2026, 3, 2)  <= scan_day <= date(2026, 3, 16)
-        in_nov_spike   = date(2025, 11, 17) <= scan_day <= date(2025, 11, 24)
-        if in_march_spike:
+        events = story.get("events", {})
+        if scan_day in events.get("acme_spike_broad", frozenset()):
             base["VULNERABILITY"] = 12
             base["BUG"] = 18
-        elif in_nov_spike:
+        elif scan_day in events.get("acme_secondary_spike", frozenset()):
             base["VULNERABILITY"] = 7
             base["BUG"] = 14
     return base

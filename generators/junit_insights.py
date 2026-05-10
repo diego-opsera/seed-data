@@ -61,9 +61,10 @@ def _pass_rate(org_name: str, scan_day: date, story: dict, start: date, end: dat
         return 0.70 + 0.25 * local_t
 
     if story.get("security_spikes", False):
-        if date(2026, 3, 2)  <= scan_day <= date(2026, 3, 16):
+        events = story.get("events", {})
+        if scan_day in events.get("acme_spike_broad", frozenset()):
             return 0.65
-        if date(2025, 11, 17) <= scan_day <= date(2025, 11, 24):
+        if scan_day in events.get("acme_secondary_spike", frozenset()):
             return 0.78
     return 0.95
 

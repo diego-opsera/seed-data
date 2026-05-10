@@ -14,25 +14,100 @@ import yaml
 
 
 # ---------------------------------------------------------------------------
-# Story loader — single source of truth for dates
+# Story loader + narrative event windows
+#
+# Every narrative event (security spikes, incident week, hotfix recovery,
+# vacation periods) is defined as a (start_offset, end_offset) tuple of
+# days-before-today. load_story() materializes these to actual date sets
+# anchored to today, so the demo always shows the same story arc relative
+# to whenever it's run.
+#
+# US_HOLIDAYS stays calendar-absolute on purpose — federal holidays exist
+# at fixed dates regardless of story window.
 # ---------------------------------------------------------------------------
 
+# (days_before_today_inclusive_max, days_before_today_inclusive_min)
+# Anchored so today=2026-05-10 reproduces the original dates we used.
+EVENT_OFFSETS = {
+    # Acme primary SEV1 weekend (peak ~64-66 days back from today)
+    "acme_primary_spike":   (66, 61),
+    # Broader Acme spike window — used by Sonar/JUnit/GitCustodian for slow-rising metrics
+    "acme_spike_broad":     (69, 55),
+    # Acme secondary spike (~24 weeks before today)
+    "acme_secondary_spike": (174, 167),
+    # Mid-spike production incident week (suppressed activity)
+    "acme_incident_week":   (55, 51),
+    # Hotfix recovery week after incident
+    "acme_hotfix_week":     (48, 46),
+    # Vacation periods (~Thanksgiving wk + ~December break)
+    "vacation_thanksgiving":(167, 163),
+    "vacation_december":    (139, 130),
+}
+
+# Per-day spike volume profiles for code_scan_alert / secret_scan_alert /
+# dependabot_scan_alert. Maps days-before-today → alerts-emitted-that-day.
+# Anchored so today=2026-05-10 reproduces Mar 5-10 + Nov 17-20 patterns.
+ACME_CODE_SCAN_SPIKE_VOLUMES = {
+    66: 4, 65: 6, 64: 10, 63: 8, 62: 6, 61: 3,         # primary (Mar 5-10)
+    174: 2, 173: 5, 172: 3, 171: 2,                     # secondary (Nov 17-20)
+}
+ACME_SECRET_SCAN_SPIKE_VOLUMES = {
+    66: 2, 65: 3, 64: 5, 63: 4, 62: 3, 61: 1,
+    174: 1, 173: 3, 172: 2, 171: 1,
+}
+ACME_DEPENDABOT_SPIKE_VOLUMES = {
+    66: 3, 65: 4, 64: 7, 63: 6, 62: 4, 61: 2,
+    174: 1, 173: 4, 172: 2, 171: 1,
+}
+
+
+def _materialize_window(end_date: date, offset_range: tuple) -> frozenset:
+    """Build a frozenset of dates from end_date - max_offset..end_date - min_offset."""
+    early, late = offset_range
+    if early < late:
+        early, late = late, early
+    out = []
+    d = end_date - timedelta(days=early)
+    stop = end_date - timedelta(days=late)
+    while d <= stop:
+        out.append(d)
+        d += timedelta(days=1)
+    return frozenset(out)
+
+
+def _materialize_volumes(end_date: date, volumes_by_offset: dict) -> dict:
+    """Build {date: volume} from {days_before_today: volume}."""
+    return {end_date - timedelta(days=offset): vol
+            for offset, vol in volumes_by_offset.items()}
+
+
+def materialize_events(end_date: date) -> dict:
+    """Compute all narrative event date sets / volume maps for a given anchor."""
+    return {
+        name: _materialize_window(end_date, offsets)
+        for name, offsets in EVENT_OFFSETS.items()
+    } | {
+        # Per-day volume tables (kept separate from the date sets above)
+        "acme_code_scan_spike_volumes":   _materialize_volumes(end_date, ACME_CODE_SCAN_SPIKE_VOLUMES),
+        "acme_secret_scan_spike_volumes": _materialize_volumes(end_date, ACME_SECRET_SCAN_SPIKE_VOLUMES),
+        "acme_dependabot_spike_volumes":  _materialize_volumes(end_date, ACME_DEPENDABOT_SPIKE_VOLUMES),
+    }
+
+
 def load_story(name: str = "narrative", *, window_days: int = 365) -> dict:
-    """Load a story YAML and inject today-relative dates.
+    """Load a story YAML and inject today-relative dates + event windows.
 
-    The on-disk YAML files don't carry start_date / end_date — those are
-    always computed here so the demo always shows a rolling window ending
-    today, regardless of when the file was last edited or which insert
-    script is running. No script needs to mutate the file.
+    The on-disk YAML files don't carry start_date / end_date / event windows —
+    they're computed here so the demo always shows the same arc relative to
+    today. No insert script needs to mutate the file.
 
-    Parameters
-    ----------
-    name         The story file basename (e.g. "narrative", "meridian_narrative").
-    window_days  Rolling window length. Defaults to 365.
+    Story dict gets:
+      start_date / end_date — ISO strings, rolling window ending today
+      events                — dict of frozen date sets + volume maps,
+                              keyed by name (e.g. 'acme_primary_spike')
     """
     path = f"config/stories/{name}.yaml"
     if not os.path.isabs(path):
-        # Try cwd first, then /tmp/seed-data (Databricks cluster sync)
         for base in (".", "/tmp/seed-data"):
             candidate = os.path.join(base, path)
             if os.path.exists(candidate):
@@ -43,6 +118,7 @@ def load_story(name: str = "narrative", *, window_days: int = 365) -> dict:
     today = date.today()
     story["start_date"] = (today - timedelta(days=window_days)).isoformat()
     story["end_date"]   = today.isoformat()
+    story["events"]     = materialize_events(today)
     return story
 
 
@@ -51,37 +127,49 @@ def load_story(name: str = "narrative", *, window_days: int = 365) -> dict:
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# March 18 2026 production incident
-# Suppression window: feature throughput tanks while devs firefight
-# Hotfix window: surge of emergency commits/PRs after stabilization
+# Production incident windows — anchored relative to today via EVENT_OFFSETS.
+#
+# Legacy callers that don't have a story dict still get correct behavior
+# because we lazily materialize the windows against date.today() on first use.
+# Newer callers can pass a story to use that story's anchor instead.
 # ---------------------------------------------------------------------------
 
-_INCIDENT_SUPPRESSED = frozenset({
-    date(2026, 3, 16), date(2026, 3, 17), date(2026, 3, 18),
-    date(2026, 3, 19), date(2026, 3, 20),
-})
-_INCIDENT_HOTFIX = frozenset({
-    date(2026, 3, 23), date(2026, 3, 24), date(2026, 3, 25),
-})
+_LAZY_EVENTS_CACHE = {}
 
 
-def incident_multiplier(d: date) -> float:
-    """Activity multiplier for the March 18 2026 production incident.
+def _events_for(end_date: date) -> dict:
+    if end_date not in _LAZY_EVENTS_CACHE:
+        _LAZY_EVENTS_CACHE[end_date] = materialize_events(end_date)
+    return _LAZY_EVENTS_CACHE[end_date]
+
+
+def _events_from_story_or_today(story: dict | None) -> dict:
+    if story and "events" in story:
+        return story["events"]
+    return _events_for(date.today())
+
+
+def incident_multiplier(d: date, story: dict | None = None) -> float:
+    """Activity multiplier for the production incident window.
     Incident week: 20% of normal throughput (devs in war-room, not shipping).
-    Recovery week: 145% as hotfixes and catch-up work surge."""
-    if d in _INCIDENT_SUPPRESSED:
+    Recovery week: 145% as hotfixes and catch-up work surge.
+
+    `story` is optional for backward compat — if not provided, anchors to today.
+    """
+    events = _events_from_story_or_today(story)
+    if d in events["acme_incident_week"]:
         return 0.20
-    if d in _INCIDENT_HOTFIX:
+    if d in events["acme_hotfix_week"]:
         return 1.45
     return 1.0
 
 
-def is_incident_suppressed(d: date) -> bool:
-    return d in _INCIDENT_SUPPRESSED
+def is_incident_suppressed(d: date, story: dict | None = None) -> bool:
+    return d in _events_from_story_or_today(story)["acme_incident_week"]
 
 
-def is_incident_hotfix(d: date) -> bool:
-    return d in _INCIDENT_HOTFIX
+def is_incident_hotfix(d: date, story: dict | None = None) -> bool:
+    return d in _events_from_story_or_today(story)["acme_hotfix_week"]
 
 
 US_HOLIDAYS = frozenset({
@@ -130,16 +218,17 @@ def day_scale(d: date, story: dict) -> float:
     Return a 0.0–1.0 activity multiplier for a given date.
     Returns 1.0 for all days if the story has no day-scaling config.
     Vacation periods return 0.0. Weekends/holidays return a small random scale.
+    Vacation/emergency-weekend dates come from story["events"] (materialized
+    from utils.EVENT_OFFSETS at story-load time).
     """
     if "weekend_multiplier" not in story:
         return 1.0
 
-    # Vacation periods: full shutdown
-    for period in story.get("vacation_periods", []):
-        vstart = date.fromisoformat(period["start"])
-        vend = date.fromisoformat(period["end"])
-        if vstart <= d <= vend:
-            return 0.0
+    events = _events_from_story_or_today(story)
+
+    # Vacation periods (Thanksgiving week + December break) → full shutdown
+    if d in events["vacation_thanksgiving"] or d in events["vacation_december"]:
+        return 0.0
 
     day_seed = d.year * 10000 + d.month * 100 + d.day
 
@@ -148,11 +237,9 @@ def day_scale(d: date, story: dict) -> float:
         return rng.uniform(0.03, 0.08)
 
     if d.weekday() >= 5:  # Saturday=5, Sunday=6
-        emergency_str = story.get("emergency_weekend_start")
-        if emergency_str:
-            ew = date.fromisoformat(emergency_str)
-            if d == ew or d == ew + timedelta(days=1):
-                return story.get("emergency_weekend_multiplier", 0.25)
+        # SEV1 emergency weekend → elevated activity (devs on-call)
+        if d in events["acme_primary_spike"]:
+            return story.get("emergency_weekend_multiplier", 0.25)
         rng = random.Random(day_seed + 33)
         return rng.uniform(0.05, 0.15)
 
@@ -251,10 +338,11 @@ def active_user_count(d: date, story: dict, total_users: int) -> int:
     - Weekends/holidays: random 0–10% of the day's normal weekday count
     - Weekdays: monthly trend base + monthly noise + daily jitter
     """
+    events = _events_from_story_or_today(story)
+
     # Vacation: no one
-    for period in story.get("vacation_periods", []):
-        if date.fromisoformat(period["start"]) <= d <= date.fromisoformat(period["end"]):
-            return 0
+    if d in events["vacation_thanksgiving"] or d in events["vacation_december"]:
+        return 0
 
     # Compute the weekday baseline for this date
     if "user_count_start" not in story:
@@ -274,12 +362,11 @@ def active_user_count(d: date, story: dict, total_users: int) -> int:
 
     # Weekends/holidays: 0–10% of weekday base, random per day
     if d.weekday() >= 5 or d in US_HOLIDAYS:
-        emergency_str = story.get("emergency_weekend_start")
-        if emergency_str:
-            ew = date.fromisoformat(emergency_str)
-            if d == ew or d == ew + timedelta(days=1):
-                frac = story.get("emergency_weekend_multiplier", 0.25)
-                return max(1, round(weekday_base * frac))
+        # SEV1 emergency weekend (anchored to today via story["events"]) →
+        # elevated weekend activity from on-call response.
+        if d in events["acme_primary_spike"]:
+            frac = story.get("emergency_weekend_multiplier", 0.25)
+            return max(1, round(weekday_base * frac))
         rng = random.Random(day_seed + 77)
         frac = rng.uniform(0.0, 0.10)
         return max(0, round(weekday_base * frac))

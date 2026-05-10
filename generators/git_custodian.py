@@ -109,9 +109,10 @@ def _issues_per_scan(org_name: str, scan_day: date, story: dict, start: date, en
 
     base = rng.randint(2, 5)
     if story.get("security_spikes", False):
-        if date(2026, 3, 2)  <= scan_day <= date(2026, 3, 16):
+        events = story.get("events", {})
+        if scan_day in events.get("acme_spike_broad", frozenset()):
             return base + rng.randint(4, 6)
-        if date(2025, 11, 17) <= scan_day <= date(2025, 11, 24):
+        if scan_day in events.get("acme_secondary_spike", frozenset()):
             return base + rng.randint(2, 4)
     return base
 
