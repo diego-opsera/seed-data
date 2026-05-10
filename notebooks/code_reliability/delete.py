@@ -37,6 +37,12 @@ _deletes = [
     # see notebooks/code_reliability/create_table_invicti_issues.py
     ("source_to_stage.raw_invicti_all_issues",
      "record_inserted_by IN ('seed-data', 'seed-data-meridian')"),
+    # raw_mongo_transformed_data_gitscraper + _issues — tables we created;
+    # see notebooks/code_reliability/create_table_gitscraper.py
+    ("source_to_stage.raw_mongo_transformed_data_gitscraper",
+     "record_inserted_by IN ('seed-data', 'seed-data-meridian')"),
+    ("source_to_stage.raw_mongo_transformed_data_gitscraper_issues",
+     "record_inserted_by IN ('seed-data', 'seed-data-meridian')"),
 ]
 
 for table, predicate in _deletes:
