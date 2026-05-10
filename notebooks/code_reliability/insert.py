@@ -104,22 +104,54 @@ for label, entities, story in ORG_CONFIGS:
 # filter_group_id (created by dora/insert.py — must run before us). Distinct
 # created_by tag 'seed-data-cr@demo.io' so delete.py can scope its cleanup.
 
-# KPI UUIDs from vnxt-insights-api-main/src/queries/kpiIdentifierConfig.json
-SONAR_RATINGS_KPIS = [
-    "9a712182-3c09-44be-ab73-371ed2ef977a",  # sonar_ratings_overview
-    "71e0f5f3-13d5-4efd-953f-7f6b4297094f",  # sonar_ratings_table
-    "c691a170-151a-4f37-8c70-3237c0fcfca9",  # sonar_ratings_distinct_values
-    "eee041d2-a2b5-4100-a360-30418cdd554c",  # coverage_table_data
+# KPI UUIDs — pulled dynamically from master_data.kpi_table so we cover every
+# variant the dashboard widget might be bound to (template-common, template-hw,
+# wd_hier_*, opsera_*, custom user-created). The filter_groups SQL doesn't
+# enforce tool_type during the project_name JOIN, so binning is loose:
+#   anything matching sonar/coverage/reliability/defect/quality → 'sonar' bucket
+#   anything matching twistlock                                  → 'twistlock' bucket
+#   anything matching web/invicti/was                            → 'was' bucket
+#
+# Hardcoded fallback lists (kpiIdentifierConfig.json) are kept as a safety
+# net in case kpi_table is empty or the dynamic query fails.
+SONAR_RATINGS_FALLBACK = [
+    "9a712182-3c09-44be-ab73-371ed2ef977a",
+    "71e0f5f3-13d5-4efd-953f-7f6b4297094f",
+    "c691a170-151a-4f37-8c70-3237c0fcfca9",
+    "eee041d2-a2b5-4100-a360-30418cdd554c",
+    "4605e9d7-5986-478c-aa08-e3d7fa694c48",
 ]
-TWISTLOCK_KPIS = [
-    "f720f383-ce15-4c65-ae26-32905f87a73f",  # twistlock_security_overview
-    "f6633a96-c036-4d3f-ad56-5749966adc9e",  # twistlock_security_tab_points
-    "ac98c409-f03f-429e-a125-2b4bdc9fc6dc",  # twistlock_security_table
-    "bd98c409-f03f-429e-a125-2b4bdc9fc6dc",  # twistlock_security_filter
+TWISTLOCK_FALLBACK = [
+    "f720f383-ce15-4c65-ae26-32905f87a73f",
+    "f6633a96-c036-4d3f-ad56-5749966adc9e",
+    "ac98c409-f03f-429e-a125-2b4bdc9fc6dc",
+    "bd98c409-f03f-429e-a125-2b4bdc9fc6dc",
 ]
-DEFECT_DENSITY_KPIS = [
-    "4605e9d7-5986-478c-aa08-e3d7fa694c48",  # sonarqube_defect_density
-]
+
+
+def _kpi_uuids_by_pattern(rlike_pattern: str) -> list:
+    """Pull every kpi_table UUID whose displayName or kpi_identifier matches."""
+    try:
+        rows = spark.sql(f"""
+            SELECT DISTINCT uuid
+            FROM {CATALOG}.master_data.kpi_table
+            WHERE LOWER(COALESCE(displayName, '')) RLIKE '{rlike_pattern}'
+               OR LOWER(COALESCE(kpi_identifier, '')) RLIKE '{rlike_pattern}'
+        """).collect()
+        return sorted({r["uuid"] for r in rows if r["uuid"]})
+    except Exception as e:
+        print(f"  WARN: kpi_table query failed: {e}")
+        return []
+
+
+SONAR_KPIS = _kpi_uuids_by_pattern("sonar|coverage|reliability|defect|quality_gate|maintainability") \
+             or SONAR_RATINGS_FALLBACK
+TWISTLOCK_KPIS = _kpi_uuids_by_pattern("twistlock|container") or TWISTLOCK_FALLBACK
+WAS_KPIS = _kpi_uuids_by_pattern("invicti|web_app_security|was_overview|web app security|web_app|web-app")
+
+print(f"  Discovered {len(SONAR_KPIS)} sonar/coverage/defect KPI UUIDs")
+print(f"  Discovered {len(TWISTLOCK_KPIS)} twistlock KPI UUIDs")
+print(f"  Discovered {len(WAS_KPIS)} web app security KPI UUIDs")
 
 CR_FILTER_CREATED_BY = "seed-data-cr@demo.io"
 
@@ -180,17 +212,26 @@ for org_name, projects in SONAR_PROJECTS.items():
         continue
     print(f"  {org_name} → filter_group_id={fg_id}")
 
-    _insert_filter_value(
-        fg_id, tool_type='sonar', filter_name='project_name',
-        values=projects, kpi_uuids=SONAR_RATINGS_KPIS + DEFECT_DENSITY_KPIS,
-        sort_number=20,
-    )
-    _insert_filter_value(
-        fg_id, tool_type='twistlock', filter_name='project_name',
-        values=projects, kpi_uuids=TWISTLOCK_KPIS,
-        sort_number=21,
-    )
-    print(f"    inserted 2 filter_values rows (sonar + twistlock) covering {projects}")
+    if SONAR_KPIS:
+        _insert_filter_value(
+            fg_id, tool_type='sonar', filter_name='project_name',
+            values=projects, kpi_uuids=SONAR_KPIS,
+            sort_number=20,
+        )
+    if TWISTLOCK_KPIS:
+        _insert_filter_value(
+            fg_id, tool_type='twistlock', filter_name='project_name',
+            values=projects, kpi_uuids=TWISTLOCK_KPIS,
+            sort_number=21,
+        )
+    if WAS_KPIS:
+        _insert_filter_value(
+            fg_id, tool_type='was', filter_name='project_name',
+            values=projects, kpi_uuids=WAS_KPIS,
+            sort_number=22,
+        )
+    n_inserted = sum(bool(x) for x in [SONAR_KPIS, TWISTLOCK_KPIS, WAS_KPIS])
+    print(f"    inserted {n_inserted} filter_values rows covering {projects}")
 
 
 # ── Verify ─────────────────────────────────────────────────────────────────────
@@ -266,6 +307,17 @@ spark.sql(f"""
     GROUP BY project_name, severity
     ORDER BY project_name, severity
 """).show(50, truncate=False)
+
+print(f"\n{'─'*60}\n  VERIFY: kpi_table UUIDs we discovered + bound to our filter values\n{'─'*60}")
+all_kpis = SONAR_KPIS + TWISTLOCK_KPIS + WAS_KPIS
+if all_kpis:
+    in_clause = ", ".join(f"'{u}'" for u in all_kpis)
+    spark.sql(f"""
+        SELECT kt.uuid, kt.displayName, kt.kpi_identifier
+        FROM {CATALOG}.master_data.kpi_table kt
+        WHERE kt.uuid IN ({in_clause})
+        ORDER BY kt.displayName
+    """).show(200, truncate=False)
 
 print(f"\n{'─'*60}\n  VERIFY: filter_values_unity rows we just inserted\n{'─'*60}")
 spark.sql(f"""
