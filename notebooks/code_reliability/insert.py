@@ -21,7 +21,7 @@ for _key in list(sys.modules.keys()):
 sys.path.insert(0, "/tmp/seed-data")
 os.chdir("/tmp/seed-data")
 
-from generators import dependabot_scan_alert, asp_sonar_issues
+from generators import dependabot_scan_alert, asp_sonar_issues, asp_sonar_measures
 
 CATALOG = "playground_prod"
 
@@ -73,6 +73,7 @@ ORG_CONFIGS = [
 GENERATORS = [
     ("dependabot_scan_alert", dependabot_scan_alert),
     ("asp_sonar_issues",      asp_sonar_issues),
+    ("asp_sonar_measures",    asp_sonar_measures),
 ]
 
 # ── Execute ────────────────────────────────────────────────────────────────────
@@ -215,6 +216,44 @@ spark.sql(f"""
     FROM latest WHERE rk = 1
     GROUP BY org_name, project, type
     ORDER BY org_name, project, type
+""").show(50, truncate=False)
+
+print(f"\n{'─'*60}\n  VERIFY: asp_sonar_measures (latest scan per project per org)\n{'─'*60}")
+spark.sql(f"""
+    WITH latest AS (
+        SELECT org_name, project_name, branch,
+               project_coverage_value, project_reliability_rating_value,
+               project_security_rating_value, project_sqale_rating_value,
+               project_bugs_value, quality_gate_status,
+               source_record_insert_datetime,
+               row_number() OVER (PARTITION BY org_name, project_name, branch
+                                  ORDER BY source_record_insert_datetime DESC) AS rk
+        FROM {CATALOG}.source_to_stage.raw_sonar_metric_split_data_branchwise
+        WHERE record_inserted_by IN ('seed-data', 'seed-data-meridian')
+    )
+    SELECT org_name, project_name,
+           project_coverage_value AS coverage_pct,
+           project_reliability_rating_value AS rel_rating,
+           project_security_rating_value    AS sec_rating,
+           project_sqale_rating_value       AS maint_rating,
+           project_bugs_value               AS bugs,
+           quality_gate_status              AS gate
+    FROM latest WHERE rk = 1
+    ORDER BY org_name, project_name
+""").show(50, truncate=False)
+
+print(f"\n{'─'*60}\n  VERIFY: measures⋈issues JOIN key alignment (must be > 0)\n{'─'*60}")
+spark.sql(f"""
+    SELECT m.org_name, m.project_name, COUNT(*) AS n_matches
+    FROM {CATALOG}.source_to_stage.raw_sonar_metric_split_data_branchwise m
+    INNER JOIN {CATALOG}.source_to_stage.raw_sonar_type_data_branchwise i
+        ON m.org_name = i.org_name
+       AND m.project_name = i.project
+       AND m.branch = i.branch
+       AND m.source_record_insert_datetime = i.source_record_insert_datetime
+    WHERE m.record_inserted_by IN ('seed-data', 'seed-data-meridian')
+    GROUP BY m.org_name, m.project_name
+    ORDER BY m.org_name, m.project_name
 """).show(50, truncate=False)
 
 print(f"\n{'─'*60}\n  VERIFY: filter_values_unity rows we just inserted\n{'─'*60}")

@@ -23,6 +23,10 @@ _deletes = [
     # (distinct from real 'sp_opsera_prodqa_de' tag).
     ("source_to_stage.raw_sonar_type_data_branchwise",
      "record_inserted_by IN ('seed-data', 'seed-data-meridian')"),
+    # raw_sonar_metric_split_data_branchwise — underlying table for the
+    # base_datasets.asp_sonar_measures view. Same scope tag.
+    ("source_to_stage.raw_sonar_metric_split_data_branchwise",
+     "record_inserted_by IN ('seed-data', 'seed-data-meridian')"),
 ]
 
 for table, predicate in _deletes:
