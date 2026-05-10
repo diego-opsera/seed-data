@@ -10,7 +10,7 @@ os.chdir("/tmp/seed-data")
 
 import yaml
 from generators import direct_data, seats_usage, org_mapping, ide_org_level
-from generators import code_scan_alert, secret_scan_alert, file_extensions
+from generators import code_scan_alert, secret_scan_alert, dependabot_scan_alert, file_extensions
 from generators import ai_assistant_acceptance, ai_usage_user_level
 from generators import copilot_billing
 
@@ -36,6 +36,7 @@ statements += [(ide_org_level.TABLE,           s) for s in ide_org_level.generat
 statements += [(file_extensions.TABLE,         s) for s in file_extensions.generate(CATALOG, entities, story)]
 statements += [(code_scan_alert.TABLE,         s) for s in code_scan_alert.generate(CATALOG, entities_direct, story)]
 statements += [(secret_scan_alert.TABLE,       s) for s in secret_scan_alert.generate(CATALOG, entities_direct, story)]
+statements += [(dependabot_scan_alert.TABLE,   s) for s in dependabot_scan_alert.generate(CATALOG, entities_direct, story)]
 statements += [(ai_assistant_acceptance.TABLE, s) for s in ai_assistant_acceptance.generate(CATALOG, entities_direct, story)]
 statements += [(ai_usage_user_level.TABLE,     s) for s in ai_usage_user_level.generate(CATALOG, entities_direct, story)]
 statements += [(copilot_billing.TABLE,         s) for s in copilot_billing.generate(CATALOG, entities_direct, story)]
