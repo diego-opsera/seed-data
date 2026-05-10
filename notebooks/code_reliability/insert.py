@@ -21,7 +21,7 @@ for _key in list(sys.modules.keys()):
 sys.path.insert(0, "/tmp/seed-data")
 os.chdir("/tmp/seed-data")
 
-from generators import dependabot_scan_alert, asp_sonar_issues, asp_sonar_measures, twistlock_security_issues
+from generators import dependabot_scan_alert, asp_sonar_issues, asp_sonar_measures, twistlock_security_issues, invicti_was
 
 CATALOG = "playground_prod"
 
@@ -75,6 +75,7 @@ GENERATORS = [
     ("asp_sonar_issues",          asp_sonar_issues),
     ("asp_sonar_measures",        asp_sonar_measures),
     ("twistlock_security_issues", twistlock_security_issues),
+    ("invicti_was",               invicti_was),
 ]
 
 # ── Execute ────────────────────────────────────────────────────────────────────
@@ -296,6 +297,19 @@ spark.sql(f"""
     WHERE m.record_inserted_by IN ('seed-data', 'seed-data-meridian')
     GROUP BY m.org_name, m.project_name
     ORDER BY m.org_name, m.project_name
+""").show(50, truncate=False)
+
+print(f"\n{'─'*60}\n  VERIFY: raw_invicti_data scans + severity\n{'─'*60}")
+spark.sql(f"""
+    SELECT WebsiteName, ThreatLevel,
+           VulnerabilityCriticalCount AS crit,
+           VulnerabilityHighCount AS high,
+           VulnerabilityMediumCount AS med,
+           VulnerabilityLowCount AS low,
+           InitiatedAt
+    FROM {CATALOG}.source_to_stage.raw_invicti_data
+    WHERE record_inserted_by IN ('seed-data', 'seed-data-meridian')
+    ORDER BY WebsiteName
 """).show(50, truncate=False)
 
 print(f"\n{'─'*60}\n  VERIFY: twistlock_security_issues by project + severity\n{'─'*60}")
