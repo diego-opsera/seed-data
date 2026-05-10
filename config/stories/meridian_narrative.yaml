@@ -1,8 +1,6 @@
 name: "meridian_narrative"
-# Date range is overwritten at runtime by notebooks/meridian/insert.py
-# (merged from narrative.yaml so both stories share the same rolling window)
-start_date: "2025-04-01"
-end_date: "2026-03-31"
+# start_date / end_date are NOT defined here — generators.utils.load_story()
+# computes a rolling window ending today at runtime.
 
 # Small data engineering team (10 engineers) ramping up Copilot adoption.
 # user_count_start=2 → ~20% initial adoption (2 of ~10 engineers using Copilot)

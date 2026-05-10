@@ -6,8 +6,8 @@
 # Date window: rolling 1-year, comes from narrative.yaml (rewritten daily by
 # notebooks/insert.py).
 
-import sys, os, re, yaml
-from datetime import date, timedelta
+import sys, os
+from datetime import date
 
 # Module cache-bust — same pattern as direct/, dora/, meridian/ insert scripts
 for _key in list(sys.modules.keys()):
@@ -18,27 +18,14 @@ sys.path.insert(0, "/tmp/seed-data")
 os.chdir("/tmp/seed-data")
 
 from generators import value_stream, pipeline_failures
+from generators.utils import load_story
 
 CATALOG = "playground_prod"
 
-# Self-refresh narrative.yaml to a rolling 1-year window ending today —
-# matches the logic in master notebooks/insert.py so this script works
-# correctly whether or not master was run first. The pipeline-failures
-# feature is sensitive to this: pipeline-failures.sql hardcodes
-# `pipeline_started_at >= DATE_SUB(CURRENT_DATE(), 30)`, so seeded rows
-# must align with the cluster's real "today" or they fall outside the window.
-_today = date.today()
-_start = _today - timedelta(days=365)
-_yaml_path = "/tmp/seed-data/config/stories/narrative.yaml"
-with open(_yaml_path) as _f:
-    _yaml = _f.read()
-_yaml = re.sub(r'^start_date: ".*"', f'start_date: "{_start.isoformat()}"', _yaml, flags=re.MULTILINE)
-_yaml = re.sub(r'^end_date: ".*"',   f'end_date: "{_today.isoformat()}"',   _yaml, flags=re.MULTILINE)
-with open(_yaml_path, "w") as _f:
-    _f.write(_yaml)
-print(f"Date window refreshed: {_start.isoformat()} -> {_today.isoformat()}")
-
-narrative = yaml.safe_load(open("config/stories/narrative.yaml"))
+# Story dates are computed at runtime — rolling 1-year window ending today.
+# pipeline-failures.sql hardcodes `pipeline_started_at >= DATE_SUB(CURRENT_DATE(),
+# 30)` so seeded rows must align with the cluster's real "today".
+narrative = load_story("narrative")
 
 for cfg, label in [(value_stream.ACME, "Acme"), (value_stream.MERIDIAN, "Meridian")]:
     statements = value_stream.generate(CATALOG, cfg, narrative)

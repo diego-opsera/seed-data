@@ -17,18 +17,16 @@ from generators import (
     ide_org_level, ai_assistant_acceptance, ai_usage_user_level,
     copilot_billing, code_scan_alert, secret_scan_alert,
 )
+from generators.utils import load_story
 
 CATALOG = "playground_prod"
 
 # ── Story configs ──────────────────────────────────────────────────────────────
-# narrative.yaml drives the rolling date window (rewritten daily by master insert).
-# meridian_narrative.yaml holds Meridian-specific settings; it inherits the date
-# range from narrative.yaml so both stories always share the same window.
+# Both stories share a rolling 1-year window ending today (computed by
+# load_story). meridian_narrative.yaml only holds Meridian-specific knobs.
 
-narrative = yaml.safe_load(open("config/stories/narrative.yaml"))
-meridian_story = yaml.safe_load(open("config/stories/meridian_narrative.yaml"))
-meridian_story["start_date"] = narrative["start_date"]
-meridian_story["end_date"]   = narrative["end_date"]
+narrative      = load_story("narrative")
+meridian_story = load_story("meridian_narrative")
 
 # ── Entities ───────────────────────────────────────────────────────────────────
 # Defined inline so we never touch config/entities.yaml (Acme-scoped).

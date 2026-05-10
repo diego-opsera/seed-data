@@ -12,7 +12,6 @@
 #   exec(open("/tmp/seed-data/notebooks/code_reliability/insert.py").read())
 
 import sys, os, uuid, yaml
-from datetime import date, timedelta
 
 # Module cache-bust — ensures fresh generator code on re-run
 for _key in list(sys.modules.keys()):
@@ -21,6 +20,8 @@ for _key in list(sys.modules.keys()):
 
 sys.path.insert(0, "/tmp/seed-data")
 os.chdir("/tmp/seed-data")
+
+from generators.utils import load_story
 
 from generators import dependabot_scan_alert, asp_sonar_issues, asp_sonar_measures, twistlock_security_issues, invicti_was, git_custodian, junit_insights
 
@@ -34,21 +35,8 @@ CATALOG = "playground_prod"
 # ── Story configs ──────────────────────────────────────────────────────────────
 # Both stories share the same date window (rewritten daily by master insert.py).
 
-acme_story     = yaml.safe_load(open("config/stories/narrative.yaml"))
-meridian_story = yaml.safe_load(open("config/stories/meridian_narrative.yaml"))
-
-# Override dates in-memory to a rolling 1-year window ending today.
-# We DON'T rewrite narrative.yaml on disk — that's the master insert.py's
-# job. This script just makes sure its own run uses today-relative dates
-# whether or not master ran first.
-_today = date.today()
-_rolling_start = (_today - timedelta(days=365)).isoformat()
-_rolling_end   = _today.isoformat()
-acme_story["start_date"]     = _rolling_start
-acme_story["end_date"]       = _rolling_end
-meridian_story["start_date"] = _rolling_start
-meridian_story["end_date"]   = _rolling_end
-print(f"Story dates (in-memory): {_rolling_start} -> {_rolling_end}")
+acme_story     = load_story("narrative")
+meridian_story = load_story("meridian_narrative")
 
 # ── Entity configs ─────────────────────────────────────────────────────────────
 # Acme entities come from config/entities.yaml; we swap in orgs[1] (the direct

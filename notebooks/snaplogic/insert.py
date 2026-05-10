@@ -6,13 +6,15 @@ for _key in list(sys.modules.keys()):
 
 sys.path.insert(0, "/tmp/seed-data")
 
+import os
+os.chdir("/tmp/seed-data")
 import yaml
 from generators import snaplogic
+from generators.utils import load_story
 
-with open("/tmp/seed-data/config/entities.yaml") as f:
+with open("config/entities.yaml") as f:
     entities = yaml.safe_load(f)
-with open("/tmp/seed-data/config/stories/narrative.yaml") as f:
-    story = yaml.safe_load(f)
+story = load_story("narrative")
 
 CATALOG = "playground_prod"
 

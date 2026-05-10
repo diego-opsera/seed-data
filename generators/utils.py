@@ -5,9 +5,45 @@ Shared helpers for data generation:
 - SQL STRUCT / ARRAY literal builders
 - Internal consistency validators
 """
+import os
 import random
 from datetime import date, timedelta
 from typing import Any
+
+import yaml
+
+
+# ---------------------------------------------------------------------------
+# Story loader — single source of truth for dates
+# ---------------------------------------------------------------------------
+
+def load_story(name: str = "narrative", *, window_days: int = 365) -> dict:
+    """Load a story YAML and inject today-relative dates.
+
+    The on-disk YAML files don't carry start_date / end_date — those are
+    always computed here so the demo always shows a rolling window ending
+    today, regardless of when the file was last edited or which insert
+    script is running. No script needs to mutate the file.
+
+    Parameters
+    ----------
+    name         The story file basename (e.g. "narrative", "meridian_narrative").
+    window_days  Rolling window length. Defaults to 365.
+    """
+    path = f"config/stories/{name}.yaml"
+    if not os.path.isabs(path):
+        # Try cwd first, then /tmp/seed-data (Databricks cluster sync)
+        for base in (".", "/tmp/seed-data"):
+            candidate = os.path.join(base, path)
+            if os.path.exists(candidate):
+                path = candidate
+                break
+    with open(path) as f:
+        story = yaml.safe_load(f)
+    today = date.today()
+    story["start_date"] = (today - timedelta(days=window_days)).isoformat()
+    story["end_date"]   = today.isoformat()
+    return story
 
 
 # ---------------------------------------------------------------------------

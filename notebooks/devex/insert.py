@@ -9,15 +9,13 @@ os.chdir("/tmp/seed-data")
 
 import yaml
 from generators import pull_requests, commits, github_teams_members, itsm_issues, servicenow_change_requests, space_survey
+from generators.utils import load_story
 
 CATALOG = "playground_prod"
 
-def load_yaml(path):
-    with open(path) as f:
-        return yaml.safe_load(f)
-
-entities = load_yaml("config/entities.yaml")
-story    = load_yaml("config/stories/narrative.yaml")
+with open("config/entities.yaml") as f:
+    entities = yaml.safe_load(f)
+story = load_story("narrative")
 
 entities_direct = {**entities, "orgs": [entities["orgs"][1]]}
 

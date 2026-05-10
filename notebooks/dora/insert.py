@@ -9,15 +9,13 @@ os.chdir("/tmp/seed-data")
 
 import yaml
 from generators import dora, dora_charts
+from generators.utils import load_story
 
 CATALOG = "playground_prod"
 
-def load_yaml(path):
-    with open(path) as f:
-        return yaml.safe_load(f)
-
-entities = load_yaml("config/entities.yaml")
-story    = load_yaml("config/stories/narrative.yaml")
+with open("config/entities.yaml") as f:
+    entities = yaml.safe_load(f)
+story = load_story("narrative")
 
 # ── Part 1: generated base-table data ─────────────────────────────────────────
 all_statements = dora.generate(CATALOG, entities, story) + dora_charts.generate(CATALOG, entities, story)

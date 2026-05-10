@@ -1,6 +1,8 @@
 name: "narrative"
-start_date: "2025-03-25"
-end_date: "2026-04-01"
+# start_date / end_date are NOT defined here. Dates are always computed
+# at runtime by generators.utils.load_story() as a rolling window ending
+# today. This avoids the on-disk file going stale and avoids every
+# insert script having to rewrite it.
 
 # Trend: values ramp linearly from start to end over the year.
 per_user_per_day_start:

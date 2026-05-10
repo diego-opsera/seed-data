@@ -13,15 +13,13 @@ from generators import direct_data, seats_usage, org_mapping, ide_org_level
 from generators import code_scan_alert, secret_scan_alert, file_extensions
 from generators import ai_assistant_acceptance, ai_usage_user_level
 from generators import copilot_billing
+from generators.utils import load_story
 
 CATALOG = "playground_prod"
 
-def load_yaml(path):
-    with open(path) as f:
-        return yaml.safe_load(f)
-
-entities = load_yaml("config/entities.yaml")
-story    = load_yaml("config/stories/narrative.yaml")
+with open("config/entities.yaml") as f:
+    entities = yaml.safe_load(f)
+story = load_story("narrative")
 
 # Scope all direct-batch data to the test org so it can be wiped independently
 # of the core batch (demo-acme-engineering). Switch orgs[0] to the direct org
