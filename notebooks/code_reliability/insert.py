@@ -21,7 +21,7 @@ for _key in list(sys.modules.keys()):
 sys.path.insert(0, "/tmp/seed-data")
 os.chdir("/tmp/seed-data")
 
-from generators import dependabot_scan_alert, asp_sonar_issues, asp_sonar_measures, twistlock_security_issues, invicti_was, git_custodian
+from generators import dependabot_scan_alert, asp_sonar_issues, asp_sonar_measures, twistlock_security_issues, invicti_was, git_custodian, junit_insights
 
 # Ensure the missing raw_invicti_all_issues + gitscraper tables exist before
 # we try to INSERT. Idempotent CREATE TABLE IF NOT EXISTS — safe to re-run.
@@ -82,6 +82,7 @@ GENERATORS = [
     ("twistlock_security_issues", twistlock_security_issues),
     ("invicti_was",               invicti_was),
     ("git_custodian",             git_custodian),
+    ("junit_insights",            junit_insights),
 ]
 
 # ── Execute ────────────────────────────────────────────────────────────────────
@@ -156,11 +157,13 @@ SONAR_KPIS = _kpi_uuids_by_pattern("sonar|coverage|reliability|defect|quality_ga
 TWISTLOCK_KPIS = _kpi_uuids_by_pattern("twistlock|container") or TWISTLOCK_FALLBACK
 WAS_KPIS = _kpi_uuids_by_pattern("invicti|web_app_security|was_overview|web app security|web_app|web-app")
 GIT_CUSTODIAN_KPIS = _kpi_uuids_by_pattern("git custodian|gitcustodian|gitscraper|git_custodian")
+JUNIT_KPIS = _kpi_uuids_by_pattern("junit")
 
 print(f"  Discovered {len(SONAR_KPIS)} sonar/coverage/defect KPI UUIDs")
 print(f"  Discovered {len(TWISTLOCK_KPIS)} twistlock KPI UUIDs")
 print(f"  Discovered {len(WAS_KPIS)} web app security KPI UUIDs")
 print(f"  Discovered {len(GIT_CUSTODIAN_KPIS)} git custodian KPI UUIDs")
+print(f"  Discovered {len(JUNIT_KPIS)} junit KPI UUIDs")
 
 CR_FILTER_CREATED_BY = "seed-data-cr@demo.io"
 
@@ -255,7 +258,25 @@ for org_name, projects in SONAR_PROJECTS.items():
             values=['main'], kpi_uuids=GIT_CUSTODIAN_KPIS,
             sort_number=24,
         )
-    n_inserted = sum(bool(x) for x in [SONAR_KPIS, TWISTLOCK_KPIS, WAS_KPIS, GIT_CUSTODIAN_KPIS])
+    # JUnit Insights filters by project_url (matches git_url in the source row).
+    # Pull the actual html_url from entities so the JOIN hits exactly
+    # what the junit generator emits (no .git suffix).
+    if JUNIT_KPIS:
+        _entities_for_org = {
+            "demo-acme-direct": entities_acme,
+            "demo-meridian":    entities_meridian,
+        }[org_name]
+        junit_urls = [
+            (r.get("html_url") or f"https://github.com/{r['name']}").rstrip("/")
+            .removesuffix(".git")
+            for r in _entities_for_org["repos"]
+        ]
+        _insert_filter_value(
+            fg_id, tool_type='github', filter_name='project_url',
+            values=junit_urls, kpi_uuids=JUNIT_KPIS,
+            sort_number=25,
+        )
+    n_inserted = sum(bool(x) for x in [SONAR_KPIS, TWISTLOCK_KPIS, WAS_KPIS, GIT_CUSTODIAN_KPIS, JUNIT_KPIS])
     print(f"    inserted {n_inserted}+ filter_values rows covering {projects}")
 
 
@@ -321,6 +342,19 @@ spark.sql(f"""
     WHERE m.record_inserted_by IN ('seed-data', 'seed-data-meridian')
     GROUP BY m.org_name, m.project_name
     ORDER BY m.org_name, m.project_name
+""").show(50, truncate=False)
+
+print(f"\n{'─'*60}\n  VERIFY: junit_test_suite_report by repo\n{'─'*60}")
+spark.sql(f"""
+    SELECT repository, COUNT(*) AS n_runs,
+           SUM(passed_tests) AS total_passed,
+           SUM(failed_tests) AS total_failed,
+           SUM(errored_tests) AS total_errored,
+           SUM(skipped_tests) AS total_skipped
+    FROM {CATALOG}.source_to_stage.junit_test_suite_report
+    WHERE service_principal IN ('seed-data', 'seed-data-meridian')
+    GROUP BY repository
+    ORDER BY repository
 """).show(50, truncate=False)
 
 print(f"\n{'─'*60}\n  VERIFY: git custodian scans + issues per repo\n{'─'*60}")

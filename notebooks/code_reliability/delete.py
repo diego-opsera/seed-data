@@ -43,6 +43,10 @@ _deletes = [
      "record_inserted_by IN ('seed-data', 'seed-data-meridian')"),
     ("source_to_stage.raw_mongo_transformed_data_gitscraper_issues",
      "record_inserted_by IN ('seed-data', 'seed-data-meridian')"),
+    # junit_test_suite_report — exists in playground_prod with real prod rows;
+    # scope by service_principal (table has no record_inserted_by column)
+    ("source_to_stage.junit_test_suite_report",
+     "service_principal IN ('seed-data', 'seed-data-meridian')"),
 ]
 
 for table, predicate in _deletes:
