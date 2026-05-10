@@ -33,6 +33,10 @@ _deletes = [
     # raw_invicti_data — Web App Security widget source; scope by record_inserted_by
     ("source_to_stage.raw_invicti_data",
      "record_inserted_by IN ('seed-data', 'seed-data-meridian')"),
+    # raw_invicti_all_issues — table we created (didn't exist in playground_prod);
+    # see notebooks/code_reliability/create_table_invicti_issues.py
+    ("source_to_stage.raw_invicti_all_issues",
+     "record_inserted_by IN ('seed-data', 'seed-data-meridian')"),
 ]
 
 for table, predicate in _deletes:

@@ -1,11 +1,14 @@
 """
-Generator for source_to_stage.raw_invicti_data.
+Generator for source_to_stage.raw_invicti_data + raw_invicti_all_issues.
 
 Drives the Web Application Security Overview widget on the Code Reliability
-dashboard. SQL (was_overview.sql) joins on:
-   array_contains(filter_groups.project_name, WebsiteName)
-…then keeps only the latest scan per WebsiteId where State='Complete', and
-groups by ThreatLevel for severity bucketing.
+dashboard. SQL (was_overview.sql) joins both tables:
+   raw_invicti_data ⋈ filter_groups (on array_contains project_name)
+   ⋈ raw_invicti_all_issues (LEFT JOIN on WebsiteId)
+The WHERE clause filters on `a.Severity NOT IN ('Information', 'BestPractice')
+AND a.IsPresent = true` — so empty raw_invicti_all_issues = empty widget
++ FE crash. We populate BOTH tables; raw_invicti_all_issues is created via
+notebooks/code_reliability/create_table_invicti_issues.py first.
 
 Per project: one "Complete" scan within the last 30 days, populated with
 realistic VulnerabilityCriticalCount / High / Medium / Low / Info / BestPractice
@@ -30,6 +33,30 @@ from datetime import date, datetime, timedelta
 from .utils import _sql_val
 
 TABLE = "raw_invicti_data"
+
+ISSUE_TITLES = [
+    ("Critical", "SQL Injection in login form"),
+    ("Critical", "Remote Code Execution via deserialization"),
+    ("High",     "Stored XSS in user profile"),
+    ("High",     "Authentication bypass via JWT none algorithm"),
+    ("High",     "Missing access control on admin endpoint"),
+    ("Medium",   "Reflected XSS in search parameter"),
+    ("Medium",   "Insecure cookie missing Secure flag"),
+    ("Medium",   "Cleartext submission of password"),
+    ("Medium",   "Missing X-Frame-Options header"),
+    ("Low",      "Server version disclosure"),
+    ("Low",      "Cookie not marked as HttpOnly"),
+    ("Low",      "Missing Strict-Transport-Security header"),
+]
+
+ISSUES_INSERT_SQL = """\
+INSERT INTO {catalog}.source_to_stage.raw_invicti_all_issues
+  (WebsiteId, WebsiteName, Severity, State, IsPresent,
+   Title, Url, Type, Certainty, LastSeenDate, FirstSeenDate,
+   AssigneeName, Description, RemediationDescription, Impact,
+   LookupId, record_inserted_by, record_insert_datetime)
+VALUES
+{values};"""
 
 INSERT_SQL = """\
 INSERT INTO {catalog}.source_to_stage.raw_invicti_data
@@ -114,6 +141,7 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
     projects = [r["name"].split("/", 1)[-1] for r in repos]
 
     value_lines = []
+    issue_value_lines = []
     for project in projects:
         rng = random.Random(hash((org_name, project, "invicti")) % (2**31))
 
@@ -166,7 +194,53 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
             ")"
         )
 
+        # ── Per-vulnerability rows for raw_invicti_all_issues ────────────────
+        # The was_overview.sql LEFT JOIN + WHERE on a.Severity / IsPresent /
+        # LastSeenDate filters out rows without IsPresent=true and a matching
+        # severity that's NOT in {Information, BestPractice}. We emit one row
+        # per counted critical/high/medium/low vuln, plus a couple of info/
+        # best-practice rows that the SQL will exclude (so the data looks
+        # realistic without breaking the filter).
+        seen_dt_str = scan_dt.strftime("%d/%m/%Y %I:%M %p").lower()
+        first_seen = (scan_dt - timedelta(days=rng.randint(7, 60))).strftime("%d/%m/%Y %I:%M %p").lower()
+
+        per_severity = [
+            ("Critical", counts["critical"]),
+            ("High",     counts["high"]),
+            ("Medium",   counts["medium"]),
+            ("Low",      counts["low"]),
+            ("Informational", counts["info"]),     # filtered out by SQL — included for realism
+            ("BestPractice",  counts["best_practice"]),
+        ]
+        issue_seq = 0
+        for severity, n in per_severity:
+            for _ in range(n):
+                issue_seq += 1
+                title_pool = [t for s, t in ISSUE_TITLES if s == severity]
+                title = rng.choice(title_pool) if title_pool else f"{severity} finding"
+                url = f"{website_url}vuln-{issue_seq}"
+                lookup_id = f"{website_id}-{issue_seq}"
+                issue_value_lines.append(
+                    "  ("
+                    f"{_sql_val(website_id)}, {_sql_val(project)}, {_sql_val(severity)}, "
+                    f"{_sql_val('Present')}, TRUE, "
+                    f"{_sql_val(title)}, {_sql_val(url)}, {_sql_val('vulnerability')}, "
+                    f"{_sql_val('Confirmed')}, {_sql_val(seen_dt_str)}, {_sql_val(first_seen)}, "
+                    f"NULL, "
+                    f"{_sql_val(f'{title} detected on {project}.')}, "
+                    f"{_sql_val('Apply input validation and output encoding.')}, "
+                    f"{_sql_val('Could lead to data exposure or compromise.')}, "
+                    f"{_sql_val(lookup_id)}, "
+                    f"{_sql_val(record_inserted_by)}, {_ts_lit(end_dt)}"
+                    ")"
+                )
+
     if not value_lines:
         return []
 
-    return [INSERT_SQL.format(catalog=catalog, values=",\n".join(value_lines))]
+    statements = [INSERT_SQL.format(catalog=catalog, values=",\n".join(value_lines))]
+    if issue_value_lines:
+        statements.append(
+            ISSUES_INSERT_SQL.format(catalog=catalog, values=",\n".join(issue_value_lines))
+        )
+    return statements

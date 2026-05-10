@@ -23,6 +23,10 @@ os.chdir("/tmp/seed-data")
 
 from generators import dependabot_scan_alert, asp_sonar_issues, asp_sonar_measures, twistlock_security_issues, invicti_was
 
+# Ensure the missing raw_invicti_all_issues table exists before we try to
+# INSERT into it. Idempotent CREATE TABLE IF NOT EXISTS — safe to re-run.
+exec(open("/tmp/seed-data/notebooks/code_reliability/create_table_invicti_issues.py").read())
+
 CATALOG = "playground_prod"
 
 # ── Story configs ──────────────────────────────────────────────────────────────
@@ -310,6 +314,15 @@ spark.sql(f"""
     FROM {CATALOG}.source_to_stage.raw_invicti_data
     WHERE record_inserted_by IN ('seed-data', 'seed-data-meridian')
     ORDER BY WebsiteName
+""").show(50, truncate=False)
+
+print(f"\n{'─'*60}\n  VERIFY: raw_invicti_all_issues by website + severity\n{'─'*60}")
+spark.sql(f"""
+    SELECT WebsiteName, Severity, COUNT(*) AS n
+    FROM {CATALOG}.source_to_stage.raw_invicti_all_issues
+    WHERE record_inserted_by IN ('seed-data', 'seed-data-meridian')
+    GROUP BY WebsiteName, Severity
+    ORDER BY WebsiteName, Severity
 """).show(50, truncate=False)
 
 print(f"\n{'─'*60}\n  VERIFY: twistlock_security_issues by project + severity\n{'─'*60}")
