@@ -21,7 +21,7 @@ for _key in list(sys.modules.keys()):
 sys.path.insert(0, "/tmp/seed-data")
 os.chdir("/tmp/seed-data")
 
-from generators import dependabot_scan_alert
+from generators import dependabot_scan_alert, asp_sonar_issues
 
 CATALOG = "playground_prod"
 
@@ -72,6 +72,7 @@ ORG_CONFIGS = [
 
 GENERATORS = [
     ("dependabot_scan_alert", dependabot_scan_alert),
+    ("asp_sonar_issues",      asp_sonar_issues),
 ]
 
 # ── Execute ────────────────────────────────────────────────────────────────────
@@ -91,12 +92,27 @@ for label, entities, story in ORG_CONFIGS:
             print("done")
 
 # ── Verify ─────────────────────────────────────────────────────────────────────
-print(f"\n{'─'*60}\n  VERIFY\n{'─'*60}")
-verify_sql = f"""
+print(f"\n{'─'*60}\n  VERIFY: dependabot_scan_alert\n{'─'*60}")
+spark.sql(f"""
     SELECT organization, severity, state, COUNT(*) AS n
     FROM {CATALOG}.base_datasets.dependabot_scan_alert
     WHERE organization IN ('demo-acme-direct', 'demo-meridian')
     GROUP BY organization, severity, state
     ORDER BY organization, severity, state
-"""
-spark.sql(verify_sql).show(50, truncate=False)
+""").show(50, truncate=False)
+
+print(f"\n{'─'*60}\n  VERIFY: asp_sonar_issues (latest scan per project per org)\n{'─'*60}")
+spark.sql(f"""
+    WITH latest AS (
+        SELECT org_name, project, type, severity, status,
+               source_record_insert_datetime,
+               row_number() OVER (PARTITION BY org_name, project, branch
+                                  ORDER BY source_record_insert_datetime DESC) AS rk
+        FROM {CATALOG}.base_datasets.asp_sonar_issues
+        WHERE record_inserted_by IN ('seed-data', 'seed-data-meridian')
+    )
+    SELECT org_name, project, type, COUNT(*) AS n
+    FROM latest WHERE rk = 1
+    GROUP BY org_name, project, type
+    ORDER BY org_name, project, type
+""").show(50, truncate=False)
