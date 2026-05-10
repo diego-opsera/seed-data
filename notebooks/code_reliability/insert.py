@@ -11,7 +11,7 @@
 # Run:
 #   exec(open("/tmp/seed-data/notebooks/code_reliability/insert.py").read())
 
-import sys, os, re, uuid, yaml
+import sys, os, uuid, yaml
 from datetime import date, timedelta
 
 # Module cache-bust — ensures fresh generator code on re-run
@@ -21,21 +21,6 @@ for _key in list(sys.modules.keys()):
 
 sys.path.insert(0, "/tmp/seed-data")
 os.chdir("/tmp/seed-data")
-
-# Self-refresh narrative.yaml to a rolling 1-year window ending today.
-# Mirrors what notebooks/insert.py + value_stream/insert.py do, so this
-# script can be run standalone without stale dates dropping the widgets'
-# date filters past our scan timestamps.
-_today = date.today()
-_start = _today - timedelta(days=365)
-_yaml_path = "/tmp/seed-data/config/stories/narrative.yaml"
-with open(_yaml_path) as _f:
-    _yaml = _f.read()
-_yaml = re.sub(r'^start_date: ".*"', f'start_date: "{_start.isoformat()}"', _yaml, flags=re.MULTILINE)
-_yaml = re.sub(r'^end_date: ".*"',   f'end_date: "{_today.isoformat()}"',   _yaml, flags=re.MULTILINE)
-with open(_yaml_path, "w") as _f:
-    _f.write(_yaml)
-print(f"Date window refreshed: {_start.isoformat()} -> {_today.isoformat()}")
 
 from generators import dependabot_scan_alert, asp_sonar_issues, asp_sonar_measures, twistlock_security_issues, invicti_was, git_custodian, junit_insights
 
@@ -51,8 +36,19 @@ CATALOG = "playground_prod"
 
 acme_story     = yaml.safe_load(open("config/stories/narrative.yaml"))
 meridian_story = yaml.safe_load(open("config/stories/meridian_narrative.yaml"))
-meridian_story["start_date"] = acme_story["start_date"]
-meridian_story["end_date"]   = acme_story["end_date"]
+
+# Override dates in-memory to a rolling 1-year window ending today.
+# We DON'T rewrite narrative.yaml on disk — that's the master insert.py's
+# job. This script just makes sure its own run uses today-relative dates
+# whether or not master ran first.
+_today = date.today()
+_rolling_start = (_today - timedelta(days=365)).isoformat()
+_rolling_end   = _today.isoformat()
+acme_story["start_date"]     = _rolling_start
+acme_story["end_date"]       = _rolling_end
+meridian_story["start_date"] = _rolling_start
+meridian_story["end_date"]   = _rolling_end
+print(f"Story dates (in-memory): {_rolling_start} -> {_rolling_end}")
 
 # ── Entity configs ─────────────────────────────────────────────────────────────
 # Acme entities come from config/entities.yaml; we swap in orgs[1] (the direct
