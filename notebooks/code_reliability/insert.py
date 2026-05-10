@@ -11,7 +11,8 @@
 # Run:
 #   exec(open("/tmp/seed-data/notebooks/code_reliability/insert.py").read())
 
-import sys, os, uuid, yaml
+import sys, os, re, uuid, yaml
+from datetime import date, timedelta
 
 # Module cache-bust — ensures fresh generator code on re-run
 for _key in list(sys.modules.keys()):
@@ -20,6 +21,21 @@ for _key in list(sys.modules.keys()):
 
 sys.path.insert(0, "/tmp/seed-data")
 os.chdir("/tmp/seed-data")
+
+# Self-refresh narrative.yaml to a rolling 1-year window ending today.
+# Mirrors what notebooks/insert.py + value_stream/insert.py do, so this
+# script can be run standalone without stale dates dropping the widgets'
+# date filters past our scan timestamps.
+_today = date.today()
+_start = _today - timedelta(days=365)
+_yaml_path = "/tmp/seed-data/config/stories/narrative.yaml"
+with open(_yaml_path) as _f:
+    _yaml = _f.read()
+_yaml = re.sub(r'^start_date: ".*"', f'start_date: "{_start.isoformat()}"', _yaml, flags=re.MULTILINE)
+_yaml = re.sub(r'^end_date: ".*"',   f'end_date: "{_today.isoformat()}"',   _yaml, flags=re.MULTILINE)
+with open(_yaml_path, "w") as _f:
+    _f.write(_yaml)
+print(f"Date window refreshed: {_start.isoformat()} -> {_today.isoformat()}")
 
 from generators import dependabot_scan_alert, asp_sonar_issues, asp_sonar_measures, twistlock_security_issues, invicti_was, git_custodian, junit_insights
 

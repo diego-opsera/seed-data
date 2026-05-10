@@ -118,7 +118,27 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
     if not user_logins:
         user_logins = [f"{org_name}-bot"]
 
+    is_meridian = (org_name == "demo-meridian")
     spike_days = _SPIKE_DAYS if story.get("security_spikes", False) else {}
+
+    # Meridian pre/post-Opsera inflection at t=0.5 — pre-phase has heavier
+    # alert volume (manual dep mgmt, slower fixes), post-phase ramps down
+    # (Opsera-driven Renovate-style auto-PRs catching alerts faster).
+    total_days = max((end - start).days, 1)
+    inflection_day = start + timedelta(days=total_days // 2)
+
+    def meridian_alerts_for(d: date) -> int:
+        """Pre-Opsera: ~1.5 alerts/weekday; post-Opsera: ramps from 1.0 → 0.3."""
+        day_rng = random.Random(hash((str(d), "dep_count_meridian")) % (2**31))
+        if d < inflection_day:
+            return day_rng.choices([0, 1, 2, 3], weights=[15, 30, 35, 20])[0]
+        # Post-inflection: linear decay over the back half
+        post_t = (d - inflection_day).days / max((end - inflection_day).days, 1)
+        return day_rng.choices([0, 1, 2], weights=[
+            40 + int(40 * post_t),                # 0-alerts share grows over time
+            45 - int(20 * post_t),
+            15 - int(20 * post_t),
+        ])[0]
 
     # Per-repo synthetic IDs (kept stable per repo across runs)
     def repo_ids(repo_name):
@@ -133,6 +153,8 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
             n_alerts = spike_days[d]
         elif d.weekday() >= 5:
             continue
+        elif is_meridian:
+            n_alerts = meridian_alerts_for(d)
         else:
             day_rng = random.Random(hash((str(d), "dep_count", org_name)) % (2**31))
             # ~0.8 alerts per weekday = ~4/week (same cadence as code_scan)
@@ -169,8 +191,12 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
             updated_dt = created_dt + timedelta(hours=rng.randint(1, 12))
 
             if state == "fixed":
-                # Most patches available immediately — 70% fixed in 1-14 days
-                if rng.random() < 0.70:
+                # Meridian post-inflection: alerts auto-PR'd within 1-3 days.
+                # Pre-inflection or Acme: 70% in 1-14 days, 30% lingering 15-60.
+                if is_meridian and d >= inflection_day:
+                    fix_dt = created_dt + timedelta(days=rng.randint(1, 3),
+                                                    hours=rng.randint(0, 23))
+                elif rng.random() < 0.70:
                     fix_dt = created_dt + timedelta(days=rng.randint(1, 14),
                                                     hours=rng.randint(0, 23))
                 else:

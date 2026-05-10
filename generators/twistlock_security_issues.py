@@ -153,22 +153,22 @@ def _row_severity(cves: list[tuple[str, str, str]]) -> str:
 
 
 def _select_cves_for_phase(rng: random.Random, comp_cves: list, org_name: str) -> list:
-    """Pick a subset of the component's CVE catalogue weighted by org phase."""
-    # Acme post-spike : keep ~75% of medium/high, drop most criticals
-    # Meridian       : keep ~50% — even cleaner post-Opsera state
-    keep_pct = 0.5 if _is_meridian(org_name) else 0.7
+    """Pick a subset of the component's CVE catalogue weighted by org phase.
+    Acme: ~60% chance of keeping critical CVEs so the March-spike narrative is
+    visible across multiple projects (not just whichever single repo rolled
+    the lone critical). Meridian: ~10% — clean post-Opsera state."""
     out = []
     for cve in comp_cves:
         sev = cve[1].lower()
         roll = rng.random()
         if sev == "critical":
-            if roll < (0.10 if _is_meridian(org_name) else 0.25):
+            if roll < (0.10 if _is_meridian(org_name) else 0.60):
                 out.append(cve)
         elif sev == "high":
             if roll < (0.40 if _is_meridian(org_name) else 0.65):
                 out.append(cve)
         elif sev == "medium":
-            if roll < keep_pct:
+            if roll < (0.50 if _is_meridian(org_name) else 0.70):
                 out.append(cve)
         else:  # low / info
             if roll < 0.50:
