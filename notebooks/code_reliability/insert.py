@@ -157,7 +157,15 @@ SONAR_KPIS = _kpi_uuids_by_pattern("sonar|coverage|reliability|defect|quality_ga
 TWISTLOCK_KPIS = _kpi_uuids_by_pattern("twistlock|container") or TWISTLOCK_FALLBACK
 WAS_KPIS = _kpi_uuids_by_pattern("invicti|web_app_security|was_overview|web app security|web_app|web-app")
 GIT_CUSTODIAN_KPIS = _kpi_uuids_by_pattern("git custodian|gitcustodian|gitscraper|git_custodian")
-JUNIT_KPIS = _kpi_uuids_by_pattern("junit")
+# Drill-down sub-KPIs (e.g. junit_insights_drilldown_table_data,
+# junit_insights_tab_data_points) only live in kpiIdentifierConfig.json
+# on the FE — not in master_data.kpi_table — so dynamic discovery misses
+# them. Hardcode here.
+JUNIT_FALLBACK_DRILLDOWN = [
+    "31b68fd2-aaf6-4eac-9638-c14dc5c2ebf6",  # junit_insights_drilldown_table_data
+    "e4d0bff4-392a-4878-9b78-522f0557c31a",  # junit_insights_tab_data_points
+]
+JUNIT_KPIS = sorted(set(_kpi_uuids_by_pattern("junit")) | set(JUNIT_FALLBACK_DRILLDOWN))
 
 print(f"  Discovered {len(SONAR_KPIS)} sonar/coverage/defect KPI UUIDs")
 print(f"  Discovered {len(TWISTLOCK_KPIS)} twistlock KPI UUIDs")
