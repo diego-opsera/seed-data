@@ -42,8 +42,13 @@ _deletes = [
 for table, predicate in _deletes:
     fqn = f"{CATALOG}.{table}"
     try:
+        if not spark.catalog.tableExists(fqn):
+            print(f"{table}: skipped — table does not exist yet")
+            continue
         n = spark.sql(f"SELECT COUNT(*) FROM {fqn} WHERE {predicate}").collect()[0][0]
         spark.sql(f"DELETE FROM {fqn} WHERE {predicate}")
         print(f"{table}: deleted {n} rows")
     except Exception as e:
-        print(f"{table}: ERROR — {e}")
+        # Compact the error — full JVM stack traces are noise here
+        msg = str(e).split("\n")[0][:200]
+        print(f"{table}: ERROR — {msg}")
