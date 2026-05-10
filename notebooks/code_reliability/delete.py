@@ -13,9 +13,10 @@ _deletes = [
     # dependabot_scan_alert — scoped by `organization` (matches generator output)
     ("base_datasets.dependabot_scan_alert",
      "organization IN ('demo-acme-direct', 'demo-meridian')"),
-    # asp_sonar_issues — scoped by `record_inserted_by` (distinct from real
-    # 'sp_opsera_prodqa_de' tag so existing rows aren't touched)
-    ("base_datasets.asp_sonar_issues",
+    # raw_sonar_type_data_branchwise — underlying table for the
+    # base_datasets.asp_sonar_issues view. Scoped by record_inserted_by
+    # (distinct from real 'sp_opsera_prodqa_de' tag).
+    ("source_to_stage.raw_sonar_type_data_branchwise",
      "record_inserted_by IN ('seed-data', 'seed-data-meridian')"),
 ]
 

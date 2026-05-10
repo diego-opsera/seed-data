@@ -1,5 +1,9 @@
 """
-Generator for base_datasets.asp_sonar_issues.
+Generator for source_to_stage.raw_sonar_type_data_branchwise.
+
+base_datasets.asp_sonar_issues is a VIEW (`select * from
+source_to_stage.raw_sonar_type_data_branchwise`) — we INSERT into the
+underlying table; the view will surface the rows automatically.
 
 Drives the Reliability / Security / Maintainability rating widgets on the
 Code Reliability dashboard. Each rating category is computed from a count
@@ -38,13 +42,13 @@ from datetime import date, datetime, timedelta
 
 from .utils import _sql_val, lerp
 
-TABLE = "asp_sonar_issues"
+TABLE = "raw_sonar_type_data_branchwise"
 
 # Insert column list — only the 30 columns we populate. Leaves 7 always-null
 # cols (code_variants, clean_code_attribute, clean_code_attribute_category,
 # impacts, issue_status, prioritized_rule, cwe) unspecified — Spark fills NULL.
 INSERT_SQL = """\
-INSERT INTO {catalog}.base_datasets.asp_sonar_issues
+INSERT INTO {catalog}.source_to_stage.raw_sonar_type_data_branchwise
   (org_name, key, rule, severity, component, project, branch,
    line, hash, text_range,
    flows, resolution, status, message, effort, debt, author, tags,
