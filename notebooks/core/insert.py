@@ -11,15 +11,13 @@ os.chdir("/tmp/seed-data")
 import yaml
 from generators import feature_level, ide_level, language_model_level, user_level, enterprise_level
 from generators.user_level import build_user_row_dicts
+from generators.utils import load_story
 
 CATALOG = "playground_prod"
 
-def load_yaml(path):
-    with open(path) as f:
-        return yaml.safe_load(f)
-
-entities = load_yaml("config/entities.yaml")
-story    = load_yaml("config/stories/narrative.yaml")
+with open("config/entities.yaml") as f:
+    entities = yaml.safe_load(f)
+story = load_story("narrative")
 
 user_rows  = build_user_row_dicts(entities, story)
 statements = []
