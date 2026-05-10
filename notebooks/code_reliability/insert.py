@@ -218,11 +218,13 @@ spark.sql(f"""
 """).show(50, truncate=False)
 
 print(f"\n{'─'*60}\n  VERIFY: filter wiring surfaces our project_names via flattened view\n{'─'*60}")
+# Flattened view's `project_name` column is ARRAY<STRING> — explode before filtering.
 spark.sql(f"""
-    SELECT level_1, level_3, project_name, COUNT(DISTINCT kpi_id) AS n_kpis
+    SELECT level_1, level_3, project_name_str, COUNT(DISTINCT kpi_id) AS n_kpis
     FROM {CATALOG}.master_data.v_filter_group_values_kpi_flattened_unity
+    LATERAL VIEW explode_outer(project_name) AS project_name_str
     WHERE level_1 IN ('Acme Corp', 'Meridian Analytics')
-      AND project_name IN ('backend','frontend','api-gateway','data-platform')
-    GROUP BY level_1, level_3, project_name
-    ORDER BY level_1, project_name
+      AND project_name_str IN ('backend','frontend','api-gateway','data-platform')
+    GROUP BY level_1, level_3, project_name_str
+    ORDER BY level_1, project_name_str
 """).show(50, truncate=False)
