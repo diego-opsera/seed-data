@@ -11,7 +11,7 @@
 # Run:
 #   exec(open("/tmp/seed-data/notebooks/code_reliability/insert.py").read())
 
-import sys, os, yaml
+import sys, os, uuid, yaml
 
 # Module cache-bust — ensures fresh generator code on re-run
 for _key in list(sys.modules.keys()):
@@ -91,6 +91,106 @@ for label, entities, story in ORG_CONFIGS:
             spark.sql(sql)
             print("done")
 
+# ── Filter wiring ──────────────────────────────────────────────────────────────
+# Dashboard SQL all routes through v_filter_group_values_kpi_flattened_unity:
+#   filter_groups CTE = SELECT ... FROM v_filter_group_values_kpi_flattened_unity
+#                       {{whereClause}}  (e.g. WHERE level_1 = 'Acme Corp')
+#   ... JOIN filter_groups ON ot.project_name = mt.project_name
+# Without matching filter_values_unity rows, every widget returns zero rows.
+#
+# We attach our project_name filter values to each demo org's EXISTING
+# filter_group_id (created by dora/insert.py — must run before us). Distinct
+# created_by tag 'seed-data-cr@demo.io' so delete.py can scope its cleanup.
+
+# KPI UUIDs from vnxt-insights-api-main/src/queries/kpiIdentifierConfig.json
+SONAR_RATINGS_KPIS = [
+    "9a712182-3c09-44be-ab73-371ed2ef977a",  # sonar_ratings_overview
+    "71e0f5f3-13d5-4efd-953f-7f6b4297094f",  # sonar_ratings_table
+    "c691a170-151a-4f37-8c70-3237c0fcfca9",  # sonar_ratings_distinct_values
+    "eee041d2-a2b5-4100-a360-30418cdd554c",  # coverage_table_data
+]
+TWISTLOCK_KPIS = [
+    "f720f383-ce15-4c65-ae26-32905f87a73f",  # twistlock_security_overview
+    "f6633a96-c036-4d3f-ad56-5749966adc9e",  # twistlock_security_tab_points
+    "ac98c409-f03f-429e-a125-2b4bdc9fc6dc",  # twistlock_security_table
+    "bd98c409-f03f-429e-a125-2b4bdc9fc6dc",  # twistlock_security_filter
+]
+DEFECT_DENSITY_KPIS = [
+    "4605e9d7-5986-478c-aa08-e3d7fa694c48",  # sonarqube_defect_density
+]
+
+CR_FILTER_CREATED_BY = "seed-data-cr@demo.io"
+
+# Sonar projects per org — must match what asp_sonar_issues / asp_sonar_measures emit.
+# (Generators strip the GitHub org prefix from each repo name to produce these.)
+SONAR_PROJECTS = {
+    "demo-acme-direct": [r["name"].split("/", 1)[-1] for r in entities_acme["repos"]],
+    "demo-meridian":    [r["name"].split("/", 1)[-1] for r in entities_meridian["repos"]],
+}
+
+# Each demo org's filter_group_id is owned by dora/insert.py. We look it up
+# by the createdBy field rather than hardcoding the UUID (it's regenerated
+# every dora run).
+ORG_FG_CREATED_BY = {
+    "demo-acme-direct": "seed-data@demo.io",
+    "demo-meridian":    "seed-data-meridian@demo.io",
+}
+
+
+def _find_filter_group_id(created_by: str):
+    rows = spark.sql(f"""
+        SELECT filter_group_id FROM {CATALOG}.master_data.filter_groups_unity
+        WHERE createdBy = '{created_by}'
+        LIMIT 1
+    """).collect()
+    return rows[0]["filter_group_id"] if rows else None
+
+
+def _insert_filter_value(filter_group_id, tool_type, filter_name, values, kpi_uuids, sort_number):
+    _id = str(uuid.uuid4())
+    vals_sql = ", ".join(f"'{v}'" for v in values)
+    kpis_sql = ", ".join(f"'{u}'" for u in kpi_uuids)
+    spark.sql(f"""
+        INSERT INTO {CATALOG}.master_data.filter_values_unity
+            (id, filter_group_id, tool_type, filter_name, filter_values, kpi_uuids,
+             custom_fieldName, created_by, created_at, updated_by, updated_at,
+             source, active, sort_number)
+        VALUES (
+            '{_id}', '{filter_group_id}',
+            '{tool_type}', '{filter_name}',
+            array({vals_sql}),
+            array({kpis_sql}),
+            'null', '{CR_FILTER_CREATED_BY}', CURRENT_TIMESTAMP(),
+            '{CR_FILTER_CREATED_BY}', CURRENT_TIMESTAMP(),
+            'user', true, {sort_number}
+        )
+    """)
+
+
+print(f"\n{'─'*60}\n  FILTER WIRING\n{'─'*60}")
+
+for org_name, projects in SONAR_PROJECTS.items():
+    fg_created_by = ORG_FG_CREATED_BY[org_name]
+    fg_id = _find_filter_group_id(fg_created_by)
+    if not fg_id:
+        print(f"  WARNING: no filter_group for {org_name} (createdBy='{fg_created_by}'). "
+              f"Did dora/insert.py run first? Skipping.")
+        continue
+    print(f"  {org_name} → filter_group_id={fg_id}")
+
+    _insert_filter_value(
+        fg_id, tool_type='sonar', filter_name='project_name',
+        values=projects, kpi_uuids=SONAR_RATINGS_KPIS + DEFECT_DENSITY_KPIS,
+        sort_number=20,
+    )
+    _insert_filter_value(
+        fg_id, tool_type='twistlock', filter_name='project_name',
+        values=projects, kpi_uuids=TWISTLOCK_KPIS,
+        sort_number=21,
+    )
+    print(f"    inserted 2 filter_values rows (sonar + twistlock) covering {projects}")
+
+
 # ── Verify ─────────────────────────────────────────────────────────────────────
 print(f"\n{'─'*60}\n  VERIFY: dependabot_scan_alert\n{'─'*60}")
 spark.sql(f"""
@@ -115,4 +215,14 @@ spark.sql(f"""
     FROM latest WHERE rk = 1
     GROUP BY org_name, project, type
     ORDER BY org_name, project, type
+""").show(50, truncate=False)
+
+print(f"\n{'─'*60}\n  VERIFY: filter wiring surfaces our project_names via flattened view\n{'─'*60}")
+spark.sql(f"""
+    SELECT level_1, level_3, project_name, COUNT(DISTINCT kpi_id) AS n_kpis
+    FROM {CATALOG}.master_data.v_filter_group_values_kpi_flattened_unity
+    WHERE level_1 IN ('Acme Corp', 'Meridian Analytics')
+      AND project_name IN ('backend','frontend','api-gateway','data-platform')
+    GROUP BY level_1, level_3, project_name
+    ORDER BY level_1, project_name
 """).show(50, truncate=False)

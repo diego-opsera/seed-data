@@ -10,6 +10,11 @@
 CATALOG = "playground_prod"
 
 _deletes = [
+    # Code-reliability filter wiring — must be cleaned BEFORE dora/delete.py
+    # would also catch them by created_by, but we own them so we delete them
+    # explicitly with our own tag.
+    ("master_data.filter_values_unity",
+     "created_by = 'seed-data-cr@demo.io'"),
     # dependabot_scan_alert — scoped by `organization` (matches generator output)
     ("base_datasets.dependabot_scan_alert",
      "organization IN ('demo-acme-direct', 'demo-meridian')"),
