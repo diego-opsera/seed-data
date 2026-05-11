@@ -81,7 +81,15 @@ for i, (table, sql) in enumerate(statements, 1):
 # by the dashboard's filter_group + KPI UUID. We attach 3 rows (one per tool)
 # to the existing Acme filter_group_id (created by dora/insert.py).
 
-AI_CODE_COMPARISON_KPIS = [
+# Two kinds of KPI ids matter here:
+#   1. String names from kpiIdentifierConfig.json. These are what the SQL
+#      template *path* resolution uses on the backend.
+#   2. Dashboard-specific GUIDs stored in MongoDB. The backend substitutes
+#      THESE (not the string names) into the {{whereClause}} when running
+#      the filter lookup against v_filter_group_values_kpi_flattened_unity.
+# We include both in kpi_uuids so the filter rows match regardless of which
+# the running backend uses.
+AI_CODE_COMPARISON_KPI_NAMES = [
     "ai_code_comparison_banner",
     "ai_code_comparison_combined_throughput",
     "ai_code_comparison_distinct_tool",
@@ -98,6 +106,15 @@ AI_CODE_COMPARISON_KPIS = [
     "ai_code_comparison_tool_comparison_matrix",
     "ai_code_comparison_tool_performance_score",
 ]
+
+# Dashboard-specific GUIDs captured from the running dashboard's network
+# calls (kpiUuid field in the request payload). Add one per chart panel.
+# Extend as more are observed.
+AI_CODE_COMPARISON_KPI_GUIDS = [
+    "5d3c39cb-de4b-41b2-b26f-140d1bb1ebfc",  # AI Tool dropdown (distinct_tool)
+]
+
+AI_CODE_COMPARISON_KPIS = AI_CODE_COMPARISON_KPI_NAMES + AI_CODE_COMPARISON_KPI_GUIDS
 KPIS_SQL = ", ".join(f"'{k}'" for k in AI_CODE_COMPARISON_KPIS)
 
 # Find the Acme filter_group_id created by dora/insert.py (created_by tag).
