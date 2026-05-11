@@ -104,11 +104,10 @@ if fg_id:
 
 print()
 print("-- DISTINCT kpi_uuid values present for the Acme filter_group --")
-print("   (tells us whether the view carries 'ai_code_comparison_*' strings")
-print("    or only real GUIDs)")
+print("   (the view pre-flattens kpi_uuids into a STRING — one row per KPI)")
 if fg_id:
     spark.sql(f"""
-      SELECT DISTINCT explode(kpi_uuids) AS kpi_uuid
+      SELECT DISTINCT kpi_uuids AS kpi_uuid
       FROM {CATALOG}.master_data.v_filter_group_values_kpi_flattened_unity
       WHERE filter_group_id = '{fg_id}'
       ORDER BY 1
@@ -119,13 +118,42 @@ print("=" * 78)
 print("6. Simulate the dashboard's distinct_tool query")
 print("=" * 78)
 print("   (this is what populates the AI Tool dropdown — should return 3 rows)")
+print()
+print("-- 6a. Minimal: by kpi_uuid only --")
 spark.sql(f"""
   WITH filters AS (
     SELECT coalesce(tool_type,'x') AS tool_type
     FROM {CATALOG}.master_data.v_filter_group_values_kpi_flattened_unity
     LATERAL VIEW explode_outer(org_name) AS org_name_col
     LATERAL VIEW explode_outer(team_names) AS team_col
-    WHERE array_contains(kpi_uuids, 'ai_code_comparison_distinct_tool')
+    WHERE kpi_uuids = 'ai_code_comparison_distinct_tool'
+  )
+  SELECT DISTINCT tool_type AS ai_assistant_tool_name FROM filters
+""").show(truncate=False)
+
+print("-- 6b. With filter_group_id scope (what the dashboard likely does) --")
+if fg_id:
+    spark.sql(f"""
+      WITH filters AS (
+        SELECT coalesce(tool_type,'x') AS tool_type
+        FROM {CATALOG}.master_data.v_filter_group_values_kpi_flattened_unity
+        LATERAL VIEW explode_outer(org_name) AS org_name_col
+        LATERAL VIEW explode_outer(team_names) AS team_col
+        WHERE filter_group_id = '{fg_id}'
+          AND kpi_uuids = 'ai_code_comparison_distinct_tool'
+      )
+      SELECT DISTINCT tool_type AS ai_assistant_tool_name FROM filters
+    """).show(truncate=False)
+
+print("-- 6c. With level scope (Project=Acme Corp, Product=demo-acme-corp) --")
+spark.sql(f"""
+  WITH filters AS (
+    SELECT coalesce(tool_type,'x') AS tool_type
+    FROM {CATALOG}.master_data.v_filter_group_values_kpi_flattened_unity
+    LATERAL VIEW explode_outer(org_name) AS org_name_col
+    LATERAL VIEW explode_outer(team_names) AS team_col
+    WHERE level_1 = 'Acme Corp' AND level_3 = 'demo-acme-corp'
+      AND kpi_uuids = 'ai_code_comparison_distinct_tool'
   )
   SELECT DISTINCT tool_type AS ai_assistant_tool_name FROM filters
 """).show(truncate=False)
@@ -138,21 +166,40 @@ spark.sql(f"DESCRIBE {CATALOG}.master_data.v_filter_group_values_kpi_flattened_u
 
 print()
 print("=" * 78)
+print("8. Compare to a known-working DORA filter row in the same filter_group")
+print("=" * 78)
+print("   (DORA is rendering correctly today, so its filter rows are a working")
+print("    reference for what dashboard-visible filter rows look like.)")
+if fg_id:
+    spark.sql(f"""
+      SELECT tool_type, org_name, team_names, project_url, deployment_stages,
+             kpi_uuids
+      FROM {CATALOG}.master_data.v_filter_group_values_kpi_flattened_unity
+      WHERE filter_group_id = '{fg_id}'
+        AND tool_type IN ('github', 'jira')
+      LIMIT 20
+    """).show(truncate=False)
+
+print()
+print("=" * 78)
 print("Diagnostic complete.")
 print("=" * 78)
 print("""
 Interpretation guide:
-  - Section 1 all 0       → ai_compare/insert.py never ran (or errored). Check notebook output.
-  - Section 2 missing cursor/claude → ai_compare additive generators didn't fire.
-  - Section 3 = 0 rows    → filter_values_unity inserts failed.
-  - Section 4 = NO ROWS   → dora/insert.py must run first.
-  - Section 5 = 0 rows    → view doesn't surface our rows. Common causes:
-       * KPI UUIDs in kpi_uuids are strings ('ai_code_comparison_*') but the
-         system expects real GUIDs — section 6 shows whether the view
-         matches by string.
-       * View requires non-null columns we didn't populate (custom_fieldName,
-         source, etc.) — check section 7 schema vs our INSERT in insert.py.
-  - Section 6 = 0 rows    → dashboard dropdown is empty → everything downstream
-                            shows "No data available". This is the most
-                            likely failure mode.
+  - Sections 1-4 all populated     → data + filter rows are landing fine.
+  - Section 5 first table empty    → view doesn't propagate our rows; check
+                                     whether tool_type column survives the view's
+                                     pivot logic.
+  - Section 6a returns 3 rows      → unscoped distinct_tool query sees our tools.
+  - Section 6b returns 3 rows      → scoped by filter_group_id, dashboard match.
+  - Section 6c returns 3 rows      → scoped by level_1/level_3, dashboard match.
+  - Section 6a yes, 6b/6c no       → view doesn't carry filter_group_id or level
+                                     columns; section 7 schema tells us which.
+  - All of 6a/6b/6c return 0 rows  → kpi_uuids stored as string isn't matching.
+                                     Check that the view's kpi_uuids really
+                                     equals the literal we passed (vs trimmed,
+                                     cased, etc.).
+  - Section 8 has dora rows but    → DORA filter rows have org_name / project_url
+    different columns populated      populated where ours have NULLs — may indicate
+                                     a column the view requires for visibility.
 """)
