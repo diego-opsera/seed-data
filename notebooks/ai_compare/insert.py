@@ -118,8 +118,19 @@ print(f"Attaching ai-tool filter rows to filter_group_id={FILTER_GROUP_ID}")
 CREATED_BY = "seed-data-ai-compare@demo.io"  # distinct tag for clean delete
 
 
+# NOTE on filter_name: the view v_filter_group_values_kpi_flattened_unity
+# pivots filter_name → typed array columns (project_url, org_name, etc.). The
+# raw tool_type column is preserved as-is. AI Code Comparison's license_info
+# chart joins strictly on f.org_name = s.access_level_name (no 'x' escape
+# hatch like DORA), so we MUST surface a non-null org_name in the view. We
+# do that by inserting rows with filter_name='org_name', filter_values=[org]
+# and the per-tool tool_type set on the raw column. One row per tool ends up
+# with (tool_type=<tool>, org_name=[demo-acme-direct]) in the view, which
+# satisfies both strict and forgiving join shapes.
+
 def _fvu(tool_type, sort_number):
     _id = str(uuid.uuid4())
+    org = entities_direct["orgs"][0]["name"]
     spark.sql(f"""
         INSERT INTO {CATALOG}.master_data.filter_values_unity
             (id, filter_group_id, tool_type, filter_name, filter_values, kpi_uuids,
@@ -127,8 +138,8 @@ def _fvu(tool_type, sort_number):
              source, active, sort_number)
         VALUES (
             '{_id}', '{FILTER_GROUP_ID}',
-            '{tool_type}', 'tool_type',
-            array('{tool_type}'),
+            '{tool_type}', 'org_name',
+            array('{org}'),
             array({KPIS_SQL}),
             'null', '{CREATED_BY}', CURRENT_TIMESTAMP(),
             '{CREATED_BY}', CURRENT_TIMESTAMP(),
@@ -139,4 +150,5 @@ def _fvu(tool_type, sort_number):
 
 for idx, tool in enumerate(entities.get("ai_tools", [])):
     _fvu(tool["name"], 100 + idx)
-print(f"filter_values_unity: inserted {len(entities.get('ai_tools', []))} ai-tool rows")
+print(f"filter_values_unity: inserted {len(entities.get('ai_tools', []))} ai-tool rows "
+      f"(filter_name='org_name', org={entities_direct['orgs'][0]['name']!r})")
