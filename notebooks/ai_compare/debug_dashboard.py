@@ -166,6 +166,114 @@ spark.sql(f"DESCRIBE {CATALOG}.master_data.v_filter_group_values_kpi_flattened_u
 
 print()
 print("=" * 78)
+print("9. Simulate the full Daily Productivity chart SQL with dashboard context")
+print("=" * 78)
+print("   Runs the actual chart query as the API would, to find which clause")
+print("   filters our data out. If THIS returns 0 rows, the bug is in our data")
+print("   alignment with the chart's joins. If non-zero, the bug is")
+print("   frontend/backend integration.")
+from datetime import date, timedelta
+to_date   = date.today().isoformat()
+from_date = (date.today() - timedelta(days=30)).isoformat()
+
+# Step-by-step build to see where rows disappear
+print()
+print(f"-- 9a. filters CTE (whereClause = kpi_uuids matches + tool_type list) --")
+print(f"   fromDate={from_date}  toDate={to_date}")
+spark.sql(f"""
+  WITH variables AS (
+    SELECT TO_DATE('{from_date}') AS start_date,
+           TO_DATE('{to_date}')   AS end_date,
+           ARRAY('github copilot', 'cursor', 'claude code') AS ai_tool
+  ),
+  filters AS (
+    SELECT coalesce(tool_type,'x') AS tool_type,
+           coalesce(org_name_col,'x') AS org_name,
+           coalesce(team_col,'x') AS team
+    FROM {CATALOG}.master_data.v_filter_group_values_kpi_flattened_unity
+    LATERAL VIEW explode_outer(org_name) AS org_name_col
+    LATERAL VIEW explode_outer(team_names) AS team_col
+    WHERE kpi_uuids = 'ai_code_comparison_leaderboard'
+      AND tool_type IN (SELECT explode(ai_tool) FROM variables)
+  )
+  SELECT * FROM filters
+""").show(truncate=False)
+
+print(f"-- 9b. acceptance_info joined to filters (the daily_productivity join) --")
+spark.sql(f"""
+  WITH variables AS (
+    SELECT TO_DATE('{from_date}') AS start_date,
+           TO_DATE('{to_date}')   AS end_date,
+           ARRAY('github copilot', 'cursor', 'claude code') AS ai_tool
+  ),
+  filters AS (
+    SELECT coalesce(tool_type,'x') AS tool_type,
+           coalesce(org_name_col,'x') AS org_name,
+           coalesce(team_col,'x') AS team
+    FROM {CATALOG}.master_data.v_filter_group_values_kpi_flattened_unity
+    LATERAL VIEW explode_outer(org_name) AS org_name_col
+    LATERAL VIEW explode_outer(team_names) AS team_col
+    WHERE kpi_uuids = 'ai_code_comparison_leaderboard'
+      AND tool_type IN (SELECT explode(ai_tool) FROM variables)
+  )
+  SELECT a.ai_assistant_tool_name, a.level, a.level_name,
+         COUNT(*) AS rows, SUM(a.ide_total_lines_accepted) AS lines_acc
+  FROM {CATALOG}.consumption_layer.ai_assistant_acceptance_info a
+  JOIN filters f ON (f.tool_type = a.ai_assistant_tool_name)
+   AND (
+     (f.team != 'x' AND a.level = 'team' AND a.level_name = f.team)
+     OR (f.team = 'x' AND a.level = 'organization' AND (f.org_name = 'x' OR a.level_name = f.org_name))
+   )
+  WHERE a.ai_assistant_usage_date BETWEEN (SELECT start_date FROM variables) AND (SELECT end_date FROM variables)
+  GROUP BY 1, 2, 3
+  ORDER BY 1
+""").show(truncate=False)
+
+print(f"-- 9c. license_info joined to filters (the adoption_rate STRICT join) --")
+print(f"   This join lacks the f.org_name='x' escape hatch — it requires")
+print(f"   s.access_level_name = f.org_name strictly.")
+spark.sql(f"""
+  WITH variables AS (
+    SELECT TO_DATE('{from_date}') AS start_date,
+           TO_DATE('{to_date}')   AS end_date,
+           ARRAY('github copilot', 'cursor', 'claude code') AS ai_tool
+  ),
+  filters AS (
+    SELECT coalesce(tool_type,'x') AS tool_type,
+           coalesce(org_name_col,'x') AS org_name,
+           coalesce(team_col,'x') AS team
+    FROM {CATALOG}.master_data.v_filter_group_values_kpi_flattened_unity
+    LATERAL VIEW explode_outer(org_name) AS org_name_col
+    LATERAL VIEW explode_outer(team_names) AS team_col
+    WHERE kpi_uuids = 'ai_code_comparison_tool_adoption_rate'
+      AND tool_type IN (SELECT explode(ai_tool) FROM variables)
+  )
+  SELECT s.ai_assistant_tool_name, s.access_level, s.access_level_name,
+         COUNT(*) AS rows
+  FROM {CATALOG}.consumption_layer.ai_assistant_license_info s
+  JOIN filters f ON (f.tool_type = s.ai_assistant_tool_name)
+   AND s.access_level = 'organization'
+   AND s.access_level_name = f.org_name   -- <-- strict, no 'x' escape
+  WHERE s.ai_assistant_usage_date BETWEEN (SELECT start_date FROM variables) AND (SELECT end_date FROM variables)
+  GROUP BY 1, 2, 3
+  ORDER BY 1
+""").show(truncate=False)
+
+print(f"-- 9d. Same as 9c but FORCING f.org_name -> 'demo-acme-direct'")
+print(f"   (proves the bug is the strict join; if this returns rows, we need")
+print(f"   to populate org_name on our filter rows)")
+spark.sql(f"""
+  SELECT s.ai_assistant_tool_name, COUNT(*) AS rows
+  FROM {CATALOG}.consumption_layer.ai_assistant_license_info s
+  WHERE s.access_level = 'organization'
+    AND s.access_level_name = 'demo-acme-direct'
+    AND s.ai_assistant_usage_date BETWEEN TO_DATE('{from_date}') AND TO_DATE('{to_date}')
+  GROUP BY 1
+  ORDER BY 1
+""").show(truncate=False)
+
+print()
+print("=" * 78)
 print("8. Compare to a known-working DORA filter row in the same filter_group")
 print("=" * 78)
 print("   (DORA is rendering correctly today, so its filter rows are a working")
