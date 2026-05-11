@@ -388,6 +388,68 @@ def active_user_count(d: date, story: dict, total_users: int) -> int:
 
 
 # ---------------------------------------------------------------------------
+# AI tool roster — multi-tool comparison (notebooks/ai_compare/)
+# ---------------------------------------------------------------------------
+
+def tool_rollout_date(tool: dict, story: dict) -> date:
+    """Date this tool becomes available within the story window."""
+    return date.fromisoformat(story["start_date"]) + timedelta(
+        days=int(tool.get("rollout_offset_days", 0))
+    )
+
+
+def tool_is_live(tool: dict, d: date, story: dict) -> bool:
+    """True iff this tool has been rolled out by date d."""
+    return d >= tool_rollout_date(tool, story)
+
+
+def tool_allocation_on(tool: dict, d: date, story: dict) -> int:
+    """Allocated licenses for this tool on date d.
+
+    Ramps linearly from 0 over a 30-day rollout once the tool is live, capped
+    at tool['allocation']. Pre-rollout returns 0.
+    """
+    start = tool_rollout_date(tool, story)
+    if d < start:
+        return 0
+    ramp_days = 30
+    days_in = (d - start).days
+    if days_in >= ramp_days:
+        return int(tool["allocation"])
+    return max(0, round(int(tool["allocation"]) * (days_in + 1) / ramp_days))
+
+
+def assign_users_to_tool(users: list[dict], tool: dict, seed: int = 0) -> list[dict]:
+    """Deterministically pick the subset of users licensed for this tool.
+
+    Copilot covers everyone (allocation=100 with 100 users). Smaller tools
+    pick a stable subset — higher-id users (later joiners) are more likely
+    to be on the newer tools, mirroring real adoption patterns.
+    """
+    n = min(int(tool["allocation"]), len(users))
+    if n >= len(users):
+        return list(users)
+    rng = random.Random(seed + abs(hash(tool["name"])))
+    return rng.sample(users, n)
+
+
+def tool_active_users(tool: dict, d: date, story: dict, total_assigned: int) -> int:
+    """Active users for this tool on date d.
+
+    active = min(allocated_today, total_assigned) * active_share * day_scale(d)
+    """
+    if not tool_is_live(tool, d, story):
+        return 0
+    allocated = min(tool_allocation_on(tool, d, story), total_assigned)
+    if allocated == 0:
+        return 0
+    scale = day_scale(d, story)
+    if scale == 0.0:
+        return 0
+    return max(0, round(allocated * float(tool["active_share"]) * scale))
+
+
+# ---------------------------------------------------------------------------
 # Date helpers
 # ---------------------------------------------------------------------------
 

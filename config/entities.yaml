@@ -72,3 +72,40 @@ models:
   - claude-4.0-sonnet
   - claude-4.5-sonnet
   - o3-mini
+
+# AI coding assistants compared on the "AI Code Comparison" dashboard.
+# rollout_offset_days = days after story start_date when this tool becomes available.
+# allocation             = licenses allocated at end-state (after rollout completes)
+# active_share           = fraction of allocated licenses active in the most recent cycle
+# productivity_mult      = avg lines-accepted-per-active-user multiplier vs baseline (1.0 = copilot)
+# chat_share             = fraction of active users whose primary mode is chat (rest are inline/IDE)
+# primary_models         = which model names appear in language_model_metrics for this tool
+ai_tools:
+  - name: "github copilot"
+    allocation: 100
+    rollout_offset_days: 0
+    active_share: 0.75
+    productivity_mult: 1.00
+    chat_share: 0.35
+    primary_models:
+      - gpt-4o
+      - gpt-4o-mini
+  - name: "cursor"
+    allocation: 40
+    rollout_offset_days: 90
+    active_share: 0.80
+    productivity_mult: 1.25
+    chat_share: 0.55
+    primary_models:
+      - claude-4.0-sonnet
+      - claude-3.7-sonnet
+      - gpt-4o
+  - name: "claude code"
+    allocation: 15
+    rollout_offset_days: 210
+    active_share: 0.85
+    productivity_mult: 1.65
+    chat_share: 0.70
+    primary_models:
+      - claude-4.5-sonnet
+      - claude-4.0-sonnet
