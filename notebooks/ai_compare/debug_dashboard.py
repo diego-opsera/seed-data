@@ -89,10 +89,14 @@ print()
 print("=" * 78)
 print("5. Does v_filter_group_values_kpi_flattened_unity surface our tool_type rows?")
 print("=" * 78)
-print("-- All rows in the view for the Acme filter_group --")
+print("   (The view pivots filter_name/filter_values into typed columns —")
+print("    tool_type, org_name, team_names, project_url, etc. — so we query")
+print("    by tool_type directly, not by filter_name.)")
+print()
+print("-- Our tool_type rows as the view sees them --")
 if fg_id:
     spark.sql(f"""
-      SELECT tool_type, filter_name, filter_values, kpi_uuids
+      SELECT tool_type, org_name, team_names, kpi_uuids
       FROM {CATALOG}.master_data.v_filter_group_values_kpi_flattened_unity
       WHERE filter_group_id = '{fg_id}'
         AND tool_type IN ('github copilot', 'cursor', 'claude code')
@@ -100,7 +104,8 @@ if fg_id:
 
 print()
 print("-- DISTINCT kpi_uuid values present for the Acme filter_group --")
-print("   (this tells us what 'kpi_uuid' format the view actually carries)")
+print("   (tells us whether the view carries 'ai_code_comparison_*' strings")
+print("    or only real GUIDs)")
 if fg_id:
     spark.sql(f"""
       SELECT DISTINCT explode(kpi_uuids) AS kpi_uuid
