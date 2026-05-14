@@ -1,21 +1,28 @@
 """
 Generator for source_to_stage.survey_details_with_responses.
-Simulates monthly SPACE (Satisfaction, Performance, Activity, Communication, Efficiency)
+Simulates weekly SPACE (Satisfaction, Performance, Activity, Communication, Efficiency)
 developer experience survey data for demo-acme-direct.
 
 Story arc:
-  - Monthly survey rounds over the full date range
-  - ~80% of active users respond each month (min 3, max all)
+  - Weekly survey rounds (every Friday) over the full date range
+  - ~80% of active users respond each week (min 3, max all)
   - SPACE scores trend upward: overall ~55% → ~75% over the year
   - Each dimension improves at slightly different rates
+
+Why weekly (not monthly):
+  The dashboard's downstream queries crash the frontend if the selected date
+  range contains 0 surveys — space_dimension_metrics returns NULL columns
+  → `.toFixed()` on undefined; space_devex_metrics CROSS JOINs current and
+  previous period, returns empty if either is missing → `data[0]` is
+  undefined → crash. Weekly cadence guarantees any 7+ day range hits at
+  least one survey in both current_period and previous_period.
 
 Deletion scoped via survey_id LIKE 'demo-seed-space-%'.
 Filtered in SQL via: WHERE level_name = 'level_3'
                        AND arrays_overlap(level_value, array('demo-acme-corp'))
 """
 import random
-from datetime import date
-from calendar import monthrange
+from datetime import date, timedelta
 from .utils import expand_users, lerp, _sql_val
 
 TABLE  = "survey_details_with_responses"
@@ -79,33 +86,31 @@ _FILTERS_SQL = (
 FORM_ID = "form-space-acme-001"
 
 
-def _survey_months(start: date, end: date):
-    """Yield the last business day of each calendar month within [start, end]."""
-    y, m = start.year, start.month
-    while date(y, m, 1) <= end:
-        _, last_dom = monthrange(y, m)
-        d = date(y, m, last_dom)
-        # Walk back to Friday if month ends on weekend
-        while d.weekday() >= 5:
-            d = date(d.year, d.month, d.day - 1)
-        if start <= d <= end:
-            yield d
-        m += 1
-        if m > 12:
-            m = 1
-            y += 1
+def _survey_fridays(start: date, end: date):
+    """Yield every Friday within [start, end]."""
+    # Advance to the first Friday on or after start
+    d = start + timedelta(days=(4 - start.weekday()) % 7)
+    while d <= end:
+        yield d
+        d += timedelta(days=7)
 
 
 # March 2026 incident dip: ~15-point score drop (0.6 answer-unit penalty)
-# Incident hit mid-March; end-of-month survey captures the negative sentiment
-_INCIDENT_SURVEY_MONTH = "2026-03"
+# Incident hit Wed Mar 18; surveys in the same week and the next ~2 weeks
+# capture the negative sentiment.
 _INCIDENT_ANSWER_PENALTY = 0.6
 
 
-def _answer(dim: str, t: float, rng: random.Random, incident_month: bool = False) -> int:
+def _is_incident_survey(d: date) -> bool:
+    """True for Fridays in the 3-week window covering the Mar 18 incident
+    (Mar 13, 20, 27 in 2026)."""
+    return date(2026, 3, 13) <= d <= date(2026, 3, 31)
+
+
+def _answer(dim: str, t: float, rng: random.Random, incident: bool = False) -> int:
     """Draw a 1–5 integer answer centred around the trending target for dimension dim."""
     target = lerp(_DIM_START[dim], _DIM_END[dim], t)
-    if incident_month:
+    if incident:
         target = max(1.0, target - _INCIDENT_ANSWER_PENALTY)
     # Gaussian noise ±0.7, then clamp and round
     raw = target + rng.gauss(0, 0.7)
@@ -120,12 +125,12 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
 
     value_lines = []
 
-    for survey_date in _survey_months(start, end):
+    for survey_date in _survey_fridays(start, end):
         t = max(0.0, min(1.0, (survey_date - start).days / total_days))
-        ym = survey_date.strftime("%Y-%m")
-        survey_id   = f"demo-seed-space-{ym}"
-        survey_name = f"SPACE Developer Survey - {survey_date.strftime('%B %Y')}"
-        description = "Monthly developer experience survey"
+        iso_week  = survey_date.strftime("%Y-W%V")  # e.g. 2026-W19
+        survey_id   = f"demo-seed-space-{iso_week}"
+        survey_name = f"SPACE Developer Survey - week of {survey_date.isoformat()}"
+        description = "Weekly developer experience survey"
 
         # ~80% of users respond; always at least 3
         n_respondents = max(3, round(len(all_users) * 0.80))
@@ -137,16 +142,16 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
             # (formula in SQL: COUNT(DISTINCT response_id) * 100 / 5 = 100%)
             response_id = f"resp-{(idx % 5) + 1:03d}"
             # Submission time: random hour on the survey date
-            u_rng = random.Random(hash((ym, user["id"], "space")) % (2**31))
+            u_rng = random.Random(hash((iso_week, user["id"], "space")) % (2**31))
             submit_hour = u_rng.randint(9, 18)
             submit_min  = u_rng.randint(0, 59)
             submit_ts   = f"TIMESTAMP '{survey_date.isoformat()} {submit_hour:02d}:{submit_min:02d}:00'"
 
-            is_incident_month = (ym == _INCIDENT_SURVEY_MONTH)
+            incident = _is_incident_survey(survey_date)
             for q_id, q_text in _QUESTIONS:
                 dim  = _DIM_MAP[q_id]
-                q_rng = random.Random(hash((ym, user["id"], q_id)) % (2**31))
-                ans  = _answer(dim, t, q_rng, incident_month=is_incident_month)
+                q_rng = random.Random(hash((iso_week, user["id"], q_id)) % (2**31))
+                ans  = _answer(dim, t, q_rng, incident=incident)
 
                 value_lines.append(
                     f"  ({_sql_val(survey_id)}, {_sql_val(survey_name)}, {_sql_val(description)}, "
