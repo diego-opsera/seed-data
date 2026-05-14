@@ -106,3 +106,50 @@ So any row matching the bare LIKE (e.g. step_type='review') passes regardless of
 **Symptom:** "0 issues resolved with Copilot assistance out of 0 total resolved issues" even though `transform_stage.mt_itsm_issues_current` has 266 rows for `customer_id = 'demo-acme-direct'` and `base_datasets.v_itsm_issues_current` surfaces them correctly.
 **Root cause:** The backend appears to gate on an active Jira integration being configured in Opsera MongoDB for the org before it queries Databricks ITSM data. Playground/demo instances have no real Jira integration, so the backend short-circuits and returns 0. Attempted inserting a row into `master_data.data_mapping` (Databricks mirror of MongoDB config) with the demo user's ID — ineffective if the backend reads MongoDB directly rather than this table.
 **Fix:** Either (a) have the data team configure a mock Jira integration in Opsera MongoDB for the `demo-acme-direct` org, or (b) modify the backend to fall back to `customer_id`-based ITSM queries when no integration is configured (similar to the SCM filter issue in Bug #3).
+
+---
+
+## 10. SPACE dashboard crashes — `space_dimension_metrics.sql` has two SQL bugs
+
+**Chart:** SPACE Developer Experience dashboard (all panels — entire dashboard fails to render)
+**Symptom:** `Cannot read properties of undefined (reading 'toFixed')` JS error on render. Fires on every date range we tried (7d, 30d, 90d).
+**Root cause:** Two bugs in `vnxt-insights-api/src/queries/template-common/space/space_dimension_metrics.sql`:
+
+1. **`previous_period` is unreachable** (lines 36–40). The `WHERE` clause admits only rows in the current period (`BETWEEN start_date AND end_date`), but the `CASE` above it has a `WHEN ... 'previous_period'` branch keyed on `start_date1`/`end_date1`. No row in the previous-period date range can survive the `WHERE`, so the `previous_period` branch is dead code. The query always returns one row (current_period only). The frontend's period-over-period diff math then reads `previous.s_score.toFixed(...)` on `undefined`. Compare to `space_overview.sql` line 40 which uses `BETWEEN start_date1 AND end_date` (correctly).
+
+2. **Dimension scores inflate with multiple surveys per period** (lines 56–64). Formula is `(dimension_sum * 100.0) / (question_count * respondent_count * 100)`. `dimension_sum` scales linearly with the number of surveys in the window, but `respondent_count = COUNT(DISTINCT response_id)` doesn't (caps at the number of distinct respondents). With weekly surveys + 30-day window we see s_score=1217.50 instead of ~75. The SQL implicitly assumes one survey per dashboard period.
+
+**Fix:** Backend changes — there is no data workaround. Fix #1: change the `WHERE` in `survey_responses` to `BETWEEN start_date1 AND end_date` so previous-period rows can pass. Fix #2: change the divisor to `COUNT(*)` (or `COUNT(DISTINCT survey_id, response_id) * question_count`) so it scales with total responses, not just unique respondents. Optional belt-and-braces: frontend should null-check before `.toFixed()`.
+
+**Note:** Tried switching SPACE survey cadence from monthly to weekly (commit b5cfe20) to defuse the crash — didn't help because the bugs are structural, not data-driven. Reverted-equivalent cadence remains weekly since it doesn't hurt other charts.
+
+---
+
+## 11. Developer Language And Editor Usage dashboard — `all_names` CTE leaks cross-tenant data
+
+**Chart:** Developer Language And Editor Usage (Programming Languages / Editors / IDE Code Completion Models / Chat Models tabs)
+**Symptom:** Dropdowns include parameter values from other tenants in the same Databricks catalog. In playground we saw real Opsera-prod custom Copilot finetune deployment names (`copilot-prod-finetune-centralus.opsera-csg-7624or389r9c`, etc.) appearing in the demo-acme-direct dashboard, all reporting 0%.
+**Root cause:** `vnxt-insights-api/src/queries/template-common/copilot-reports/copilot_developer_usage.sql:10-13`:
+```sql
+all_names AS (
+   select distinct parameter AS name from {{tableName}}
+   where param_name = (SELECT param FROM variables)
+)
+```
+No org filter and no date filter. The customer's `{{secondaryFilterClause}}` is applied to the `source` CTE that produces the metric values, but the catalog of dropdown names is pulled from the entire table across every tenant and every historical date.
+
+**Customer impact (not just a seeding artifact):**
+  - **Multi-tenant catalogs:** cross-tenant metadata leak. Customer A's custom Copilot finetune model names appear in Customer B's dashboard dropdown. Numeric values are 0 (correctly scoped), but the names themselves leak across the tenant boundary. Compliance/privacy concern depending on contracts.
+  - **Single-tenant catalogs:** historical pollution within the tenant. Any language/editor/model ever recorded stays in the dropdown forever — deprecated tools, former-employee usage, one-off `.dotenv` opens, etc.
+
+**Fix:** Apply `{{secondaryFilterClause}}` to `all_names` as well (it already exists for `source`):
+```sql
+all_names AS (
+   select distinct parameter AS name from {{tableName}}
+   where param_name = (SELECT param FROM variables)
+   {{secondaryFilterClause}}    -- ← add this
+)
+```
+Optionally also add the date range filter to limit historical pollution for single-tenant customers.
+
+**Note:** Seed data side is now correct — `notebooks/direct/insert.py` populates `base_datasets.github_copilot_developer_usage_org_level` via `generators/copilot_developer_usage.py` (commit 9714f90). Our org's languages, editors, and models surface with real metrics. The cross-tenant leak in the dropdown is a backend bug that affects real customers too, not a demo-data issue.
