@@ -42,6 +42,7 @@ from datetime import date, datetime, timedelta
 
 from . import value_stream
 from .value_stream import OrgConfig
+from .utils import smooth_duration_days
 
 
 RECORD_INSERTED_BY = "seed-data-value-stream"
@@ -276,7 +277,14 @@ def _build_failure(
         hours=8 + (run_idx * 2) % 12,
         minutes=rng.randint(0, 59),
     )
-    finished = started + timedelta(minutes=rng.randint(2, 25))
+    # Smoothed daily pipeline duration target (~10 min baseline, in days).
+    # Incident widens, hotfix narrows — keeps the run-time chart from
+    # bouncing between 2 and 25 minutes per failure.
+    target_days = smooth_duration_days(
+        target_date, 10.0 / (24 * 60), seed_key=(cfg.org_name, "pipeline_dur"),
+    )
+    duration_minutes = max(1, round(rng.gauss(target_days * 24 * 60, target_days * 24 * 60 * 0.15)))
+    finished = started + timedelta(minutes=duration_minutes)
     commit_sha = hashlib.md5(f"{pipeline_id}-{step_name}-{run_idx}".encode()).hexdigest()
     return {
         "ticket_key":   ticket_key,

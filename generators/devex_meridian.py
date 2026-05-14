@@ -23,7 +23,8 @@ Deletion scoped by:
 import random
 from datetime import date, datetime, timedelta
 
-from .utils import date_range, lerp, _sql_val, split_across
+from .utils import date_range, lerp, _sql_val, split_across, \
+    smooth_duration_days, smooth_duration_hours
 from .dora_meridian import _build_months, _phase_t
 
 TABLES = ("commits_rest_api", "pull_requests")
@@ -192,13 +193,20 @@ def generate(catalog: str, entities: dict, story: dict) -> dict[str, list[str]]:
             # ~0.2 PRs/day = ~1/week
             n_prs = day_rng.choices([0, 1], weights=[80, 20])[0]
             copilot_rate_pr = lerp(0.05, 0.20, t_phase)
-            merge_days_range = (3, 10)
+            # Pre-Opsera: slow merges (manual promotions, no automation).
+            # Baseline 6 days, smoothed across the week.
+            merge_days_base = 6.0
+            pickup_hours_base_copilot = 12.0
+            pickup_hours_base_other   = 24.0
         else:
             # ramp from 1 → 8 PRs/day
             n_prs = max(0, round(lerp(1, 8, t_phase))) + day_rng.randint(-1, 1)
             n_prs = max(0, n_prs)
             copilot_rate_pr = lerp(0.20, 0.65, t_phase)
-            merge_days_range = (1, 4)
+            # Post-Opsera: fast merges thanks to pipeline automation.
+            merge_days_base = 2.0
+            pickup_hours_base_copilot = 3.0
+            pickup_hours_base_other   = 6.0
 
         for seq in range(n_prs):
             rng = random.Random(hash((str(d), seq, "meridian-pr-row")) % (2**31))
@@ -213,7 +221,11 @@ def generate(catalog: str, entities: dict, story: dict) -> dict[str, list[str]]:
             created_hour = rng.randint(9, 16)
             created_ts   = f"{d.isoformat()} {created_hour:02d}:00:00"
 
-            days_to_merge = rng.randint(*merge_days_range)
+            # Smooth daily target so cycle-time chart isn't pure noise.
+            merge_target = smooth_duration_days(
+                d, merge_days_base, seed_key=(phase, copilot_flag, "m-merge"), story=story,
+            )
+            days_to_merge = max(0, round(rng.gauss(merge_target, merge_target * 0.10)))
             merge_date    = d + timedelta(days=days_to_merge)
 
             if merge_date <= end and rng.random() < 0.80:
@@ -237,7 +249,11 @@ def generate(catalog: str, entities: dict, story: dict) -> dict[str, list[str]]:
                 first_sha=first_commit_sha, first_commit_day=first_commit_day,
             )
 
-            pickup_hours = rng.randint(2, 8) if copilot_flag == "Y" else rng.randint(4, 24)
+            pickup_base = pickup_hours_base_copilot if copilot_flag == "Y" else pickup_hours_base_other
+            pickup_target = smooth_duration_hours(
+                d, pickup_base, seed_key=(phase, copilot_flag, "m-pickup"), story=story,
+            )
+            pickup_hours = max(1, round(rng.gauss(pickup_target, pickup_target * 0.10)))
             created_dt   = datetime.strptime(created_ts, "%Y-%m-%d %H:%M:%S")
             review_dt    = created_dt + timedelta(hours=pickup_hours)
             if pr_state == "closed" and merged_ts:

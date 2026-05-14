@@ -19,7 +19,7 @@ Filter wired via assignment_groups = 'Meridian Data Engineering'.
 import random
 from datetime import date, datetime, timedelta
 
-from .utils import date_range, _sql_val
+from .utils import date_range, _sql_val, smooth_duration_days
 from .dora_meridian import _build_months, _phase_t
 
 TABLE  = "trf_servicenow_change_requests"
@@ -115,8 +115,12 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                 started_at = datetime(open_day.year, open_day.month, open_day.day,
                                       rng.randint(8, 12), rng.randint(0, 59))
 
-                # Long resolution: 14-28 days (CAB approval + scheduling)
-                resolve_days = rng.randint(14, 28)
+                # Long resolution: ~21d baseline (CAB approval + scheduling).
+                # Smoothed across the week so the chart isn't bouncing 14–28.
+                resolve_target = smooth_duration_days(
+                    open_day, 21.0, seed_key=("cr-pre",),
+                )
+                resolve_days = max(1, round(rng.gauss(resolve_target, resolve_target * 0.08)))
                 resolved_dt  = started_at + timedelta(days=resolve_days)
 
                 scope    = rng.choice(["Emergency", "Normal"])
@@ -175,8 +179,11 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                 started_at = datetime(open_day.year, open_day.month, open_day.day,
                                       rng.randint(8, 16), rng.randint(0, 59))
 
-                # Fast resolution: 1-3 days
-                resolve_days = rng.randint(1, 3)
+                # Fast resolution: ~2d baseline post-Opsera. Smoothed.
+                resolve_target = smooth_duration_days(
+                    open_day, 2.0, seed_key=("cr-post",),
+                )
+                resolve_days = max(0, round(rng.gauss(resolve_target, resolve_target * 0.10)))
                 resolved_dt  = started_at + timedelta(days=resolve_days)
 
                 scope    = "Standard"

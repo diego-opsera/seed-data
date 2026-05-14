@@ -388,6 +388,70 @@ def active_user_count(d: date, story: dict, total_users: int) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Smooth duration helper — for charts that show per-event time-to-X
+# (cycle time, time to PR, MTTR, CR resolve time, pipeline duration, ...).
+#
+# Problem: generators that drew duration with rng.randint(a, b) per event
+# produced charts that look like white noise — day-over-day averages swing
+# wildly because each event independently rolls a fresh number.
+#
+# Pattern: instead of rolling a fresh number per event, compute one smooth
+# per-day target that drifts slowly week-to-week, then optionally add tiny
+# per-event jitter on top. Result: the baseline is a clean band so the
+# incident week's widening / hotfix week's narrowing actually stands out.
+# ---------------------------------------------------------------------------
+
+def smooth_duration_days(
+    d: date,
+    base_days: float,
+    *,
+    incident_widen: float = 2.5,
+    hotfix_narrow: float = 0.20,
+    weekly_drift_pct: float = 0.10,
+    daily_jitter_pct: float = 0.08,
+    seed_key: tuple = (),
+    story: dict | None = None,
+) -> float:
+    """Per-day duration target (in days) that drifts smoothly day to day.
+
+    Deterministic — same (d, base_days, seed_key) → same number.
+
+    Knobs:
+      base_days        baseline target for a normal day
+      weekly_drift_pct ±% the weekly anchor drifts off base (default 10%)
+      daily_jitter_pct ±% Gaussian jitter added per day (default 8%)
+      incident_widen   multiplier during incident week (default 2.5×)
+                       — story: in-flight work stalls while devs firefight
+      hotfix_narrow    multiplier during hotfix week (default 0.20×)
+                       — story: surgical hotfixes ship same-day
+
+    seed_key differentiates parallel streams (e.g., ('copilot',) vs
+    ('non_copilot',)) so they get distinct curves on the same chart.
+    Result is clamped to ≥ 0.05 days.
+    """
+    iso = d.isocalendar()
+    week_rng = random.Random(hash((iso[0], iso[1], "wk") + seed_key) % (2**31))
+    weekly_factor = 1.0 + week_rng.uniform(-weekly_drift_pct, weekly_drift_pct)
+
+    day_rng = random.Random(hash((d.toordinal(), "dy") + seed_key) % (2**31))
+    daily_factor = 1.0 + day_rng.gauss(0, daily_jitter_pct)
+
+    target = base_days * weekly_factor * daily_factor
+
+    if is_incident_suppressed(d, story):
+        target *= incident_widen
+    elif is_incident_hotfix(d, story):
+        target *= hotfix_narrow
+
+    return max(0.05, target)
+
+
+def smooth_duration_hours(d: date, base_hours: float, **kw) -> float:
+    """Same as smooth_duration_days but in hours. Default knobs unchanged."""
+    return smooth_duration_days(d, base_hours / 24.0, **kw) * 24.0
+
+
+# ---------------------------------------------------------------------------
 # AI tool roster — multi-tool comparison (notebooks/ai_compare/)
 # ---------------------------------------------------------------------------
 

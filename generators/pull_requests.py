@@ -19,7 +19,8 @@ so existing rows from other orgs are never touched.
 import random
 from datetime import date, datetime, timedelta
 from .utils import date_range, expand_users, active_user_count, lerp, _sql_val, \
-    incident_multiplier, is_incident_suppressed, is_incident_hotfix
+    incident_multiplier, is_incident_suppressed, is_incident_hotfix, \
+    smooth_duration_days, smooth_duration_hours
 
 TABLE = "pull_requests"
 
@@ -51,9 +52,16 @@ _REPOS = [
 # Copilot adoption: fraction of PRs that are Copilot, grows 20% → 65%
 _COPILOT_RATE = (0.20, 0.65)
 
-# Days to merge: Copilot PRs are faster
-_MERGE_DAYS_COPILOT     = (1, 3)
-_MERGE_DAYS_NON_COPILOT = (3, 8)
+# Baseline days-to-merge — Copilot PRs ship faster. Per-day target now
+# comes from smooth_duration_days(), with incident widening + hotfix
+# narrowing applied automatically. Old per-event randint(1,3) / (3,8)
+# pattern produced unreadable noise on the cycle-time chart.
+_MERGE_DAYS_COPILOT_BASE     = 1.8
+_MERGE_DAYS_NON_COPILOT_BASE = 5.0
+
+# Baseline review-pickup hours — same shape.
+_PICKUP_HOURS_COPILOT_BASE     = 4.0
+_PICKUP_HOURS_NON_COPILOT_BASE = 12.0
 
 
 def _fake_sha(seed: int) -> str:
@@ -160,15 +168,15 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                 created_hour = rng.randint(9, 16)
                 created_ts   = f"{d.isoformat()} {created_hour:02d}:00:00"
 
-                # Determine merge outcome
-                # Incident/hotfix PRs are emergency fixes — merge same-day or next day
-                if is_incident_suppressed(d) or is_incident_hotfix(d):
-                    merge_window = (0, 1)
-                elif pr_type == "Y":
-                    merge_window = _MERGE_DAYS_COPILOT
-                else:
-                    merge_window = _MERGE_DAYS_NON_COPILOT
-                days_to_merge = rng.randint(*merge_window)
+                # Smooth daily cycle-time target (drifts ~weekly) with
+                # incident widening + hotfix narrowing applied automatically.
+                # Tiny per-PR Gaussian jitter on top so it isn't lockstep.
+                base = (_MERGE_DAYS_COPILOT_BASE if pr_type == "Y"
+                        else _MERGE_DAYS_NON_COPILOT_BASE)
+                day_target = smooth_duration_days(
+                    d, base, seed_key=(pr_type, "merge"), story=story,
+                )
+                days_to_merge = max(0, round(rng.gauss(day_target, day_target * 0.10)))
                 merge_date    = d + timedelta(days=days_to_merge)
 
                 # PRs that would merge after end_date stay open
@@ -194,8 +202,14 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                     first_sha=first_commit_sha, first_commit_day=first_commit_day,
                 )
 
-                # first_pr_review_submitted_datetime — pickup time after PR creation
-                pickup_hours = rng.randint(2, 8) if pr_type == "Y" else rng.randint(4, 24)
+                # first_pr_review_submitted_datetime — pickup time after PR creation.
+                # Same smoothing pattern as days_to_merge — daily target with small jitter.
+                pickup_base = (_PICKUP_HOURS_COPILOT_BASE if pr_type == "Y"
+                               else _PICKUP_HOURS_NON_COPILOT_BASE)
+                pickup_target = smooth_duration_hours(
+                    d, pickup_base, seed_key=(pr_type, "pickup"), story=story,
+                )
+                pickup_hours = max(1, round(rng.gauss(pickup_target, pickup_target * 0.10)))
                 created_dt = datetime.strptime(created_ts, "%Y-%m-%d %H:%M:%S")
                 review_submitted_dt = created_dt + timedelta(hours=pickup_hours)
                 if pr_state == "closed" and merged_ts:

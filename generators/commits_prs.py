@@ -34,6 +34,7 @@ from datetime import date, timedelta
 from .utils import (
     date_range, expand_users, active_user_count, _sql_val,
     tool_is_live, assign_users_to_tool, incident_multiplier, day_scale,
+    smooth_duration_hours,
 )
 
 TABLE  = "commits_prs"
@@ -86,18 +87,29 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
     value_lines = []
     pr_counter = 1000
 
-    # PR creation delay (in hours) after a commit, scaled inversely by the
-    # tool's productivity_mult so higher-productivity tools yield faster
-    # time-to-PR in the scoreboard velocity calc.
-    def _pr_delay_hours(tags: list[str]) -> float:
+    # PR creation delay (in hours) after a commit. Uses a per-day smooth
+    # target (drifts weekly) instead of independent rolls per commit, so
+    # daily averages don't bounce. Per-tool seed_key gives each tool a
+    # distinct curve; productivity_mult scales the baseline so faster
+    # tools have shorter time-to-PR. Incident widens, hotfix narrows.
+    def _pr_delay_hours(tags: list[str], d: date) -> float:
         if not tags:
-            return rng.uniform(4, 8)
-        best_mult = max(
-            (float(t["productivity_mult"]) for t in tools if t["name"] in tags),
-            default=1.0,
-        )
-        base = rng.uniform(3, 7)
-        return max(0.5, base / best_mult)
+            base = 6.0
+            target = smooth_duration_hours(
+                d, base, seed_key=("none", "pr_delay"), story=story,
+            )
+        else:
+            best_mult = max(
+                (float(t["productivity_mult"]) for t in tools if t["name"] in tags),
+                default=1.0,
+            )
+            base = 5.0 / best_mult
+            tag_key = tuple(sorted(tags))
+            target = smooth_duration_hours(
+                d, base, seed_key=tag_key + ("pr_delay",), story=story,
+            )
+        # Tiny per-commit jitter on top of the day's target.
+        return max(0.25, rng.gauss(target, target * 0.10))
 
     for d in date_range(story["start_date"], story["end_date"]):
         baseline = active_user_count(d, story, len(all_users))
@@ -150,7 +162,7 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
                 # each commit as its own PR; the scoreboard's MIN(commit_ts)
                 # and MIN(pr_created_dt) reduce to this commit's values, so
                 # time_to_pr = delay_hours * 3600.
-                delay_h = _pr_delay_hours(ai_tags)
+                delay_h = _pr_delay_hours(ai_tags, d)
                 delay_min = int(delay_h * 60)
                 created_total_min = hour * 60 + minute + delay_min
                 created_d = d + timedelta(days=created_total_min // (24 * 60))

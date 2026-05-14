@@ -14,7 +14,7 @@ Filter wired via assignment_groups = 'ACME IT Operations'.
 """
 import random
 from datetime import date, datetime, timedelta
-from .utils import date_range, _sql_val
+from .utils import date_range, _sql_val, smooth_duration_days
 
 TABLE  = "trf_servicenow_change_requests"
 SCHEMA = "transform_stage"
@@ -108,7 +108,13 @@ def generate(catalog: str, entities: dict, story: dict) -> list[str]:
             is_opsera      = rng.random() < 0.40
             correlation_id = _opsera_correlation_id(hash((str(d), cr_counter)) % (2**31)) if is_opsera else None
 
-            resolve_days = rng.randint(1, 5)
+            # Resolution time: ~3d baseline, smoothed across the week so
+            # the CR cycle-time chart shows a band rather than per-CR noise.
+            # Incident-aware: stalls during the war-room week.
+            resolve_target = smooth_duration_days(
+                d, 3.0, seed_key=("cr",),
+            )
+            resolve_days = max(0, round(rng.gauss(resolve_target, resolve_target * 0.10)))
             resolved_dt  = started_at + timedelta(days=resolve_days, hours=rng.randint(1, 8))
 
             outcome = rng.random()
