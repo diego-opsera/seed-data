@@ -36,20 +36,25 @@ run("devex/insert.py")
 #    doesn't conflict with Acme's wiring.
 run("meridian/insert.py")
 
-# 6. release_mgmt — Acme release management (fix_version LIKE 'demo-%')
+# 6. ai_compare — AI Code Comparison dashboard data (Copilot + Cursor + Claude Code).
+#    Depends on direct/ (copilot rows in acceptance_info + usage_user_level)
+#    and dora/ (Acme filter_group_id we attach tool_type filter rows to).
+run("ai_compare/insert.py")
+
+# 7. release_mgmt — Acme release management (fix_version LIKE 'demo-%')
 run("release_mgmt/insert.py")
 
-# 7. snaplogic — SnapLogic integration data (org=demo-acme-direct)
+# 8. snaplogic — SnapLogic integration data (org=demo-acme-direct)
 run("snaplogic/insert.py")
 
-# 8. value_stream — Issue Stream / Flow View denormalized fact table
+# 9. value_stream — Issue Stream / Flow View denormalized fact table
 #    Self-contained — generates fresh data, no dependency on other batches' tables.
 #    Seeds rows for BOTH demo-acme-direct and demo-meridian.
 run("value_stream/insert.py")
 
-# 9. code_reliability — dashboard at /insights/v2/code-reliability
-#    Self-contained, seeds BOTH orgs in one place (sonar, twistlock, WAS,
-#    git custodian, JUnit, dependabot).
+# 10. code_reliability — dashboard at /insights/v2/code-reliability
+#     Self-contained, seeds BOTH orgs in one place (sonar, twistlock, WAS,
+#     git custodian, JUnit, dependabot).
 run("code_reliability/insert.py")
 
 print("\n" + "="*60)

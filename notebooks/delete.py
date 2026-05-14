@@ -26,20 +26,25 @@ run("snaplogic/delete.py")
 # 4. release_mgmt
 run("release_mgmt/delete.py")
 
-# 5. meridian — Meridian Analytics rows (DORA, copilot, devex, CRs, releases,
+# 5. ai_compare — AI Code Comparison rows. Runs BEFORE dora/ so its
+#    filter_values_unity rows (created_by='seed-data-ai-compare@demo.io')
+#    are cleaned up before dora removes the parent filter_group.
+run("ai_compare/delete.py")
+
+# 6. meridian — Meridian Analytics rows (DORA, copilot, devex, CRs, releases,
 #    filter group, jira board). Cleans its own filter_values + filter_group.
 run("meridian/delete.py")
 
-# 6. devex — delete devex filter values before dora deletes the filter group
+# 7. devex — delete devex filter values before dora deletes the filter group
 run("devex/delete.py")
 
-# 7. dora — deletes the filter group itself (after devex values are already gone)
+# 8. dora — deletes the filter group itself (after devex values are already gone)
 run("dora/delete.py")
 
-# 8. direct
+# 9. direct
 run("direct/delete.py")
 
-# 9. core
+# 10. core
 run("core/delete.py")
 
 print("\n" + "="*60)
