@@ -23,6 +23,7 @@ org_name_tables = [
     ("source_to_stage", "raw_github_copilot_billing"),
     ("master_data",     "github_copilot_orgs_mapping"),
     ("base_datasets",   "github_copilot_metrics_ide_org_level"),
+    ("base_datasets",   "github_copilot_developer_usage_org_level"),
 ]
 
 # Tables whose org column is named organization
