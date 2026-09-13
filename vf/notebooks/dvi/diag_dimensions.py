@@ -17,6 +17,7 @@
 # Run:
 #   exec(open("/tmp/seed-data/vf/notebooks/dvi/diag_dimensions.py").read())
 
+import json
 from datetime import date
 
 CATALOG = "playground_prod"
@@ -190,18 +191,22 @@ if live:
     """)
 
     print("\n-- per-month, deduped (this is what prByMonth looks like) --")
-    spark.sql(f"""
-        SELECT date_format(to_date(created_at), 'yyyy-MM') AS created_month,
-               COUNT(*) AS total_prs,
-               SUM(CASE WHEN merged_at IS NOT NULL THEN 1 ELSE 0 END) AS merged_prs,
-               ROUND(percentile_approx(
-                 CASE WHEN merged_at IS NOT NULL THEN
-                   (unix_timestamp(to_timestamp(merged_at)) - unix_timestamp(to_timestamp(created_at))) / 3600.0
-                 END, 0.5), 2) AS median_cycle_hours
-        FROM vf_dvi_pr_union
-        WHERE to_date(created_at) >= '{FROM_DATE}' AND to_date(created_at) <= '{TO_DATE}'
-        GROUP BY 1 ORDER BY 1
-    """).show(60, truncate=False)
+    try:
+        _pm = [r.asDict() for r in spark.sql(f"""
+            SELECT date_format(to_date(created_at), 'yyyy-MM') AS created_month,
+                   COUNT(*) AS total_prs,
+                   SUM(CASE WHEN merged_at IS NOT NULL THEN 1 ELSE 0 END) AS merged_prs,
+                   ROUND(percentile_approx(
+                     CASE WHEN merged_at IS NOT NULL THEN
+                       (unix_timestamp(to_timestamp(merged_at)) - unix_timestamp(to_timestamp(created_at))) / 3600.0
+                     END, 0.5), 2) AS median_cycle_hours
+            FROM vf_dvi_pr_union
+            WHERE to_date(created_at) >= '{FROM_DATE}' AND to_date(created_at) <= '{TO_DATE}'
+            GROUP BY 1 ORDER BY 1
+        """).limit(60).collect()]
+        print(json.dumps(_pm, default=str, indent=2))
+    except Exception as e:
+        print(json.dumps({"error": str(e).splitlines()[0][:200]}))
 
     latest = row(f"""
         SELECT date_format(to_date(created_at), 'yyyy-MM') AS mk,
@@ -381,23 +386,23 @@ avail = {
     "impact": True,
 }
 
-print(f"{'dimension':<12} {'raw':>10} {'unit':<14} {'score':>7}  {'wt':>5}  source")
-print("-" * 78)
+predicted = {}
 score, total_w = 0.0, 0.0
 for k, c in CONFIG.items():
+    entry = {"raw": round(raws[k], 2), "unit": c["unit"], "weight": c["w"], "metric": c["metric"]}
     if avail[k]:
         n = round(normalize_score(raws[k], c), 1)
         score += n * c["w"]
         total_w += c["w"]
-        shown = f"{n:>7.1f}"
+        entry["score"] = n
     else:
-        shown = f"{'N/A':>7}"
-    print(f"{k:<12} {raws[k]:>10.2f} {c['unit']:<14} {shown}  {c['w']:>5.2f}  {c['metric']}")
+        entry["score"] = "N/A (available=false)"
+    predicted[k] = entry
 
 if total_w > 0 and total_w < 1:
     score *= 1 / total_w      # computeDvi re-normalizes over available dimensions
-print("-" * 78)
-print(f"  predicted DVI score: {round(score, 1)} / 100")
+predicted["_dvi_score"] = round(score, 1)
+print(json.dumps(predicted, default=str, indent=2))
 print("\n  This is the SNAPSHOT path (individuals[] empty). Once per-developer rows exist the tiles")
 print("  switch to avg(individuals[dim]) instead — see dviCompute.ts computeDviFromIndividuals.")
 

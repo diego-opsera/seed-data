@@ -57,7 +57,9 @@ def hr(title):
 
 hr("1. Session catalog / schema")
 try:
-    spark.sql("SELECT current_catalog() AS catalog, current_schema() AS schema").show(truncate=False)
+    import json as _json
+    _r = spark.sql("SELECT current_catalog() AS catalog, current_schema() AS schema").collect()
+    print(_json.dumps([r.asDict() for r in _r], default=str, indent=2))
 except Exception as e:
     print(f"query failed: {str(e).splitlines()[0][:200]}")
 

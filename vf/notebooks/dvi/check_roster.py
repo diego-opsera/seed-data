@@ -19,8 +19,26 @@ for _key in list(sys.modules.keys()):
     if _key.startswith("generators") or _key.startswith("vf") or _key in ("loader",):
         del sys.modules[_key]
 
-sys.path.insert(0, "/tmp/seed-data")
-os.chdir("/tmp/seed-data")
+# Repo root: /tmp/seed-data on a cluster that ran notebooks/clone.sh, but also
+# works from a Workspace checkout (/Workspace/Users/<you>/seed-data) or cwd.
+_CANDIDATES = [
+    "/tmp/seed-data",
+    os.path.expanduser("~/seed-data"),
+    os.getcwd(),
+    os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
+    if "__file__" in dir() else os.getcwd(),
+]
+REPO_ROOT = next(
+    (c for c in _CANDIDATES if os.path.exists(os.path.join(c, "vf", "config", "entities.yaml"))),
+    None,
+)
+if REPO_ROOT is None:
+    raise RuntimeError(
+        "could not locate the seed-data checkout — tried: " + ", ".join(_CANDIDATES)
+        + "\nRun from the repo root, or clone to /tmp/seed-data (notebooks/clone.sh)."
+    )
+sys.path.insert(0, REPO_ROOT)
+os.chdir(REPO_ROOT)
 
 from vf.generators.story import load_dvi_story, load_entities, roster, repos_by_team
 from vf.generators.identity_gates import (
@@ -40,6 +58,7 @@ story = load_dvi_story()
 users = entities["users"]
 
 hr("1. Story arc")
+print(f"  repo root    : {REPO_ROOT}")
 print(f"  story        : {story['name']}")
 print(f"  window       : {story['start_date']} → {story['end_date']}")
 print(f"  today        : {story['today']}")

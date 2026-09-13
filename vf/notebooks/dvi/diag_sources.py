@@ -14,6 +14,7 @@
 # Run:
 #   exec(open("/tmp/seed-data/vf/notebooks/dvi/diag_sources.py").read())
 
+import json
 from datetime import date
 
 CATALOG = "playground_prod"
@@ -49,11 +50,16 @@ def hr(title):
 
 
 def q(sql, n=40):
-    """Run a query and show it; never raise."""
+    """Run a query and emit compact JSON; never raise.
+
+    JSON rather than Spark .show() on purpose — ASCII table borders are visual
+    bloat and painful to paste back into a conversation.
+    """
     try:
-        spark.sql(sql).show(n, truncate=False)
+        data = [r.asDict() for r in spark.sql(sql).limit(n).collect()]
+        print(json.dumps(data, default=str, indent=2))
     except Exception as e:
-        print(f"  QUERY FAILED — {str(e).splitlines()[0][:200]}")
+        print(json.dumps({"error": str(e).splitlines()[0][:200]}))
 
 
 print(f"DVI ETL window replicated: {FROM_DATE} → {TO_DATE}   (current month = {CUR_MONTH})")
