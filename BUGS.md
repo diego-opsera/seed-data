@@ -153,3 +153,62 @@ all_names AS (
 Optionally also add the date range filter to limit historical pollution for single-tenant customers.
 
 **Note:** Seed data side is now correct — `notebooks/direct/insert.py` populates `base_datasets.github_copilot_developer_usage_org_level` via `generators/copilot_developer_usage.py` (commit 9714f90). Our org's languages, editors, and models surface with real metrics. The cross-tenant leak in the dropdown is a backend bug that affects real customers too, not a demo-data issue.
+
+---
+
+## 12. `generators/commits.py` never populates `commit_email` — demo devs invisible to DVI/Tokenomics
+
+**Found:** VisualForge DVI Phase 0, 2026-09-13. Affects vnxt equally.
+**Symptom:** `base_datasets.commits_rest_api` reports **0 distinct commit emails** for every month of
+`demo-acme-direct` (37,598 rows) and `demo-meridian`, while real orgs report 43–95.
+**Root cause:** `generators/commits.py:17-21` inserts `cleansed_user_name`, `cleansed_commit_author`
+and `user_id` but omits `commit_email` entirely.
+**Impact:** both the VisualForge DVI and Tokenomics ETLs read
+`LOWER(TRIM(commit_email)) AS author_email` and then require an `@` before creating a developer
+(`validateDevIdentifier` → `getOrCreateDev`). Our seeded commits resolve to a developer only when a
+login→email mapping happens to exist from another source, so per-developer tables built from commits
+silently omit the demo roster.
+**Fix:** add `commit_email` to the INSERT column list and populate it with the same address used for
+`assignee_email` in the ITSM generator — the ETLs join sources on `LOWER(TRIM(email))`, so one
+consistent address per developer across commits / PRs / Jira / Sonar is required.
+
+---
+
+## 13. `generators/itsm_issues.py` priorities never match the high-priority defect set
+
+**Found:** VisualForge DVI Phase 0, 2026-09-13.
+**Symptom:** a mapping-scoped demo shows **0 % defect leakage** — i.e. *perfect* quality — rather than
+a realistic number.
+**Root cause:** `generators/itsm_issues.py:41` uses
+`_PRIORITIES = ["high"]*2 + ["medium"]*5 + ["low"]*3`. The DVI Quality dimension counts a defect only
+when `UPPER(issue_priority) IN ('BLOCKER','CRITICAL','HIGHEST','1','1 - CRITICAL')`
+(`dviQueries.js:itsmDefectLeakageQuery`). `HIGH` / `MEDIUM` / `LOW` all fall into the ignored bucket.
+**Note:** the catalog-wide 12.34 % leakage figure comes entirely from real Opsera Jira rows
+(`HIGHEST` 78,571 · `BLOCKER` 15,664), which is why this was invisible until the data was scoped.
+**Fix:** emit `HIGHEST` / `BLOCKER` (or `CRITICAL`) for the share of defects intended to count as
+high-priority, keeping `MEDIUM` / `LOW` for the rest.
+
+---
+
+## 14. VisualForge DVI Security dimension is unscoped — one tenant's open vulns sink every tenant
+
+**Product bug** (VisualForge backend), same class as #11.
+**Chart:** DVI Concept Dashboard → Security tile ("Security Scan Pass Rate").
+**Symptom:** Security scores **3.8/100** on `playground_prod` while the tenant's own SonarQube gates
+pass at 141/150, and the catalog-wide in-window gate rate is 95.7 %.
+**Root cause:** `dviQueries.js:aspSonarSecurityMetricsQuery` is the **tier-1** security source and has
+no org filter and no date filter — it aggregates `base_datasets.asp_sonar_issues` across the entire
+catalog and all history:
+```sql
+SELECT COUNT(*) AS total_issues,
+       SUM(CASE WHEN UPPER(type) = 'VULNERABILITY' THEN 1 ELSE 0 END) AS total_vulnerabilities,
+       ...
+FROM base_datasets.asp_sonar_issues
+```
+Because `syncDvi.js:1113` selects tier 1 whenever `total_vulnerabilities > 0`, tiers 2 (SonarQube
+quality gates) and 3 (GHA security workflows) **never run**. On `playground_prod`, 744 OPEN vs 42
+CLOSED vulnerabilities — overwhelmingly from other orgs — pin the pass rate at 5.34 %.
+**Customer impact:** on any multi-tenant catalog the Security dimension reflects other tenants' data,
+and it carries 0.20 of the DVI composite. Single-tenant catalogs get unbounded historical pollution —
+a vulnerability opened years ago never stops counting.
+**Fix:** scope tier 1 by org and by the ETL date window, the way every other dimension is scoped.

@@ -12,6 +12,26 @@ Source of truth for everything below: `visualforge@b8377ed22`,
 `services/unified-backend/src/modules/integration/databricks/`.
 See also [visualforge_seeding_insights.md](visualforge_seeding_insights.md).
 
+> ## ⚠ Status: Phase 0 is done and it revised this plan
+>
+> [`vf_dvi_phase0_findings.md`](vf_dvi_phase0_findings.md) — run 2026-09-13. Read it before acting on
+> anything below. The four changes that matter:
+>
+> 1. **All five dimensions already resolve catalog-wide** (predicted DVI **76.2**, not `N/A`). The dark
+>    tiles are a scoping / stale-ETL / wrong-catalog problem, not missing data. §1 of the findings.
+> 2. **Three of five tiles saturate at 100** in the snapshot path because the thresholds expect story
+>    points and feature counts but get PR counts and issue counts. Only the **individuals path**
+>    produces a usable dashboard — that is now the primary goal, not a Phase-2 nicety.
+> 3. **Security can't be fixed by seeding.** Tier 1 is whole-table with no org or date filter, so 744
+>    other-org open vulnerabilities pin it at 3.8/100. Route around it via per-dev GHA-per-repo pass
+>    rates (BUGS.md #14 files the product bug).
+> 4. **September 2026 is empty catalog-wide** (ingestion stopped ~2026-08-02), so seeding the current
+>    month makes `demo-acme-vf` the *only* org in the latest-month snapshot — a free scoping win.
+>
+> Also closed: `date_dim` covers 2018→2030 (no work needed), `demo-acme-vf` is unused, and none of the
+> 5 missing tables block the tiles — **Phase 2 needs no DDL**. Two of our own generators have verified
+> defects (BUGS.md #12, #13).
+
 ---
 
 ## 1. How the DVI dashboard actually gets its numbers
@@ -182,8 +202,9 @@ must be checked after insert.
 
 ## 4. Phased plan
 
-### Phase 0 — Diagnose before writing anything (half a day)
-Nothing here is speculative work; it decides the rest of the plan.
+### Phase 0 — Diagnose before writing anything — **DONE 2026-09-13**
+Results: [`vf_dvi_phase0_findings.md`](vf_dvi_phase0_findings.md). Step 1 (app-side catalog) is the
+one item still open, and is now the highest-priority unknown in the whole plan.
 
 1. **Confirm which catalog the VisualForge demo tenant resolves to.** `GET /api/v1/databricks/verify-catalog`,
    or `SELECT current_catalog()`. If it isn't `playground_prod`, every table in §2 is the wrong target

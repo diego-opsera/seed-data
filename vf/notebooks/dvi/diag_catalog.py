@@ -25,7 +25,7 @@ DVI_TABLES = {
         "raw_mongo_pipelineactivities",             # preferred deploy source (Impact)
         "raw_mongo_pipelines",
         "raw_github_teams_members",                 # Team Split labels
-        "raw_jira_issues_rest_api",                 # ITSM raw (probed before the view)
+        "raw_jira_issues_rest_api",              # OPTIONAL — probe fails soft, view is the fallback
     ],
     "base_datasets": [
         "pull_requests",                            # PR fallback (we already seed this)
@@ -37,13 +37,13 @@ DVI_TABLES = {
     ],
     "consumption_layer": [
         "commits_prs",                              # PR supplement (we already seed this)
-        "v_ghas_overview",
+        "v_ghas_overview",                       # OPTIONAL — only the vulnerability-mttr metric
         "ai_assistant_license_info",
     ],
     "master_data": [
         "date_dim",                                 # join spine for every time series
         "v_date_dim",
-        "team_member_list",
+        "team_member_list",                      # OPTIONAL — Workday hierarchy path only
     ],
 }
 
@@ -103,7 +103,10 @@ hr("4. Verdict")
 print(f"  present: {len(present)}")
 print(f"  missing: {len(missing)}")
 if missing:
-    print("\n  Missing tables need CREATE TABLE in Phase 2 (vf/notebooks/dvi/create_tables.py):")
+    print("\n  Missing:")
     for m in missing:
         print(f"    - {m}")
+    print("\n  Tables marked OPTIONAL above do NOT block the five DVI dimension tiles — every one")
+    print("  of them is read through safeQuery/a probe and degrades to a fallback. Only create a")
+    print("  missing table if diag_dimensions.py shows the dimension it feeds is the one that is dark.")
 print("\n  Next: diag_sources.py (row counts + window coverage for the present tables)")

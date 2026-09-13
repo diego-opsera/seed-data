@@ -188,11 +188,13 @@ q(f"""
 """)
 
 print("-- story_points + resolution-date completeness (Impact needs resolution_date NOT NULL) --")
+print("   NOTE: story_points is a STRING column holding values like '2.0'; always try_cast it.")
 q(f"""
   SELECT COUNT(*) AS rows,
          SUM(CASE WHEN issue_resolution_date IS NULL THEN 1 ELSE 0 END) AS null_resolution_date,
          SUM(CASE WHEN issue_updated_date   IS NULL THEN 1 ELSE 0 END) AS null_updated_date,
-         SUM(CASE WHEN story_points IS NULL OR story_points = 0 THEN 1 ELSE 0 END) AS no_story_points,
+         SUM(CASE WHEN try_cast(story_points AS DOUBLE) IS NULL
+                    OR try_cast(story_points AS DOUBLE) = 0 THEN 1 ELSE 0 END) AS no_story_points,
          SUM(CASE WHEN assignee_email IS NULL OR trim(assignee_email) = '' THEN 1 ELSE 0 END) AS no_assignee_email
   FROM {CATALOG}.base_datasets.v_itsm_issues_hist
   WHERE to_date(issue_created_date) >= '{FROM_DATE}'
