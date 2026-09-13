@@ -183,3 +183,58 @@ show 0 % leakage — reading as *perfect quality* rather than a real number.
 | Missing-table DDL | **Dropped** — none of the 5 blocks the tiles |
 | Security via Sonar/ASP seeding | **Replaced** by the GHA-per-repo per-dev route (§3) |
 | Generator fixes | **New work** — `commit_email` and ITSM priorities (§5) |
+
+---
+
+## 9. Phase 2 smoke-test results (2026-09-13)
+
+First seed of `demo-acme-vf` — September 2026, via `vf/notebooks/dvi/insert.py`.
+
+### The identity join works
+
+| check | result |
+|---|---|
+| commit emails (distinct) | **25** |
+| commits with null email | **0** |
+| PR logins resolving to a commit email local part | **25 / 25** |
+| PRs merged, median cycle | 273, **17.00h** |
+| PRs gated out by the insert-date gate | **0** |
+| GHA pass rate per repo | 97.4 – 100% |
+
+So the `commit_email` fix (BUGS.md #12) does what it needed to: 25 developers
+resolve where `demo-acme-direct`'s 37,598 commits resolve to none.
+
+### Two things the seed got wrong
+
+**a) The ETL window ends TODAY, so a forward-dated month is half-invisible.**
+The smoke run seeded all of September but `TO_DATE = currentDate()`, so only
+issues created on or before the 13th counted: `total_issues` read **9 of 20**
+inserted, and both defects happened to fall after the 13th, giving
+`high_priority_defects = 0`. Forward-dating is still correct (§4) — but
+verification output has to be read as *"rows up to today"*, not *"rows seeded"*.
+
+**b) Driving ITSM volume from `features_per_month` starved the org.**
+Working backwards from Impact's threshold (excellent = 12 resolved features)
+produced **20 issues a month for 25 developers**: 5 people had no Jira issue at
+all, and only 2 defects existed, so per-developer Quality and Impact were noise.
+
+The trade isn't real. Impact cannot track its curve for a realistic team — 25
+developers completing two features each is 50/month against a threshold of 12 —
+so **Impact saturates at 100 exactly like Throughput**, and the per-developer
+path (normalized against the org P90) is what carries the spread. Volume now
+comes from `issues_per_dev_per_week`: ~396 issues/month, all 25 developers
+covered, 18 high-priority defects on or before today, leakage ≈ 8%.
+
+### Predicted tiles after the fix
+
+| dimension | raw | score |
+|---|---|---|
+| Velocity | 16.0 median cycle hours | **62.5** |
+| Quality | ~8% defect leakage (our cohort) | ~93 |
+| Throughput | 254 merged PRs | 100 (saturated) |
+| Impact | 254 resolved features | 100 (saturated) |
+| Security | per-repo GHA 97-100% | per-dev route only; org number still pinned at 3.8 |
+
+Only Velocity lands mid-curve. That is a property of the tile design, not of the
+seed: three of the five dimensions are COUNT metrics with thresholds calibrated
+for something much smaller than a real team.

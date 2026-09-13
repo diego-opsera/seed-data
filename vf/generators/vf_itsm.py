@@ -41,8 +41,13 @@ COLUMNS = (
 )
 INSERTED_BY = "seed-data-vf"
 
+# In the ETL completion set — these are what Impact counts.
 DONE_STATUSES = ["done", "closed", "resolved", "completed", "product deployment"]
-OPEN_STATUSES = ["open", "in progress", "qa testing", "peer review", "to do"]
+# Deliberately NOT in the completion set, but real values from this catalog. Used
+# for work that is finished-ish yet uncounted, so issue volume can be realistic
+# without every feature landing in Impact.
+WIP_STATUSES = ["uat deployed", "master merge", "qa testing", "submit to qa", "peer review"]
+OPEN_STATUSES = ["open", "in progress", "to do", "backlog"]
 FEATURE_TYPES = ["story", "story", "story", "epic", "feature", "enhancement"]
 STORY_POINTS = ["1", "2", "3", "5", "8", "13"]
 
@@ -50,16 +55,24 @@ STORY_POINTS = ["1", "2", "3", "5", "8", "13"]
 def generate(catalog: str, entities: dict, story: dict, *,
              date_from: str | None = None, date_to: str | None = None) -> list[str]:
     """
-    Volume is driven per MONTH from features_per_month, not from a per-developer
-    rate. Impact is a raw COUNT against thresholds of 12/8/3, so a natural issue
-    volume for 25 developers (~200 resolved features a month) pins the tile at
-    100 and the arc becomes invisible. Working backwards from the target keeps
-    the tile on its curve.
+    Volume comes from issues_per_dev_per_week, so all 25 developers get issues
+    and the defect share is statistically meaningful.
+
+    An earlier version drove total volume backwards from features_per_month to
+    keep the Impact tile on its threshold curve (excellent = 12 resolved
+    features). That produced 20 issues a month for 25 developers: five people had
+    no Jira issue at all, and only two defects existed, so per-developer Quality
+    and Impact were noise. Impact simply cannot track its curve for a realistic
+    team — 25 developers completing two features each is 50/month against a
+    threshold of 12 — so it saturates at 100 exactly like Throughput, and the
+    per-developer path (normalized against the org P90) carries the spread.
 
     Per month:
-        resolved features = features_per_month(t) x beat.throughput   -> Impact
-        open features     = 40% of that                              -> realism
-        defects           = whatever makes defects/total = defect_share -> Quality
+        total issues = issues_per_dev_per_week(t) x devs x weeks x beat.throughput
+        defects      = defect_share(t) x beat.quality x total    -> Quality
+                       always HIGHEST/BLOCKER so they are actually counted
+        features     = the rest; ~70% reach a completion status   -> Impact
+                       the other 30% sit in WIP_STATUSES, resolution_date NULL
     """
     from .story import roster
 
@@ -73,8 +86,8 @@ def generate(catalog: str, entities: dict, story: dict, *,
 
     defect_lo = float(story["defect_share_start"])
     defect_hi = float(story["defect_share_end"])
-    feat_lo = float(story["features_per_month_start"])
-    feat_hi = float(story["features_per_month_end"])
+    wk_lo = float(story["issues_per_dev_per_week_start"])
+    wk_hi = float(story["issues_per_dev_per_week_end"])
     hi_labels = story["high_priority_labels"]
     lo_labels = story["low_priority_labels"]
 
@@ -88,18 +101,24 @@ def generate(catalog: str, entities: dict, story: dict, *,
 
         t = arc_t(month_start, arc_start, arc_end)
         beat = beat_for(month_start, arc_start, story)
-        n_feat_done = max(1, round(lerp(feat_lo, feat_hi, t) * float(beat.get("throughput", 1.0))))
-        n_feat_open = max(0, round(n_feat_done * 0.4))
+        weeks = max(1.0, len(days) / 5.0)
+        total = max(len(users),
+                    round(lerp(wk_lo, wk_hi, t) * len(users) * weeks
+                          * float(beat.get("throughput", 1.0))))
         share = min(0.6, lerp(defect_lo, defect_hi, t) * float(beat.get("quality", 1.0)))
-        n_feat_total = n_feat_done + n_feat_open
-        n_defects = max(0, round(n_feat_total * share / max(1e-6, 1.0 - share)))
+        n_defects = max(1, round(total * share))
+        n_features = max(1, total - n_defects)
+        n_feat_done = round(n_features * 0.70)
+        n_feat_wip = n_features - n_feat_done
+        n_def_done = round(n_defects * 0.70)
 
-        plan = ([("feature", True)] * n_feat_done
-                + [("feature", False)] * n_feat_open
-                + [("defect", True)] * round(n_defects * 0.7)
-                + [("defect", False)] * (n_defects - round(n_defects * 0.7)))
+        # ('feature'|'defect', 'done'|'wip'|'open')
+        plan = ([("feature", "done")] * n_feat_done
+                + [("feature", "wip")] * n_feat_wip
+                + [("defect", "done")] * n_def_done
+                + [("defect", "open")] * (n_defects - n_def_done))
 
-        for i, (kind, resolved) in enumerate(plan):
+        for i, (kind, state) in enumerate(plan):
             seq += 1
             user = users[seq % len(users)]
             day = days[i % len(days)]
@@ -115,22 +134,20 @@ def generate(catalog: str, entities: dict, story: dict, *,
 
             created_dt = datetime(day.year, day.month, day.day, rng.randint(9, 16))
             res_dt = None
-            if resolved:
+            if state == "done":
                 cycle_days = max(1, round(rng.uniform(2, 16) * (1.3 if kind == "defect" else 1.0)))
                 candidate = created_dt + timedelta(days=cycle_days, hours=rng.randint(0, 6))
-                # Resolution has to land inside the window or Impact will not see it.
-                if candidate.date() <= hi:
-                    res_dt = candidate
-                else:
-                    res_dt = datetime(hi.year, hi.month, hi.day, 17)
-
-            if res_dt is not None:
+                # Resolution must land inside the window or Impact never sees it.
+                res_dt = candidate if candidate.date() <= hi else datetime(hi.year, hi.month, hi.day, 17)
                 status = DONE_STATUSES[seq % len(DONE_STATUSES)]
                 updated_dt = res_dt
                 resolution_name = "Fixed" if kind == "defect" else "Done"
             else:
-                status = OPEN_STATUSES[seq % len(OPEN_STATUSES)]
-                updated_dt = min(created_dt + timedelta(days=rng.randint(0, 6)),
+                # WIP and open rows keep resolution_date NULL, so they add to
+                # Quality's denominator without counting toward Impact.
+                pool = WIP_STATUSES if state == "wip" else OPEN_STATUSES
+                status = pool[seq % len(pool)]
+                updated_dt = min(created_dt + timedelta(days=rng.randint(0, 9)),
                                  datetime(hi.year, hi.month, hi.day, 17))
                 resolution_name = None
 

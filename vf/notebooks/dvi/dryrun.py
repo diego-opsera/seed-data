@@ -45,6 +45,13 @@ hi = (nxt - timedelta(days=1)).isoformat()
 
 print(f"dry run — smoke window {lo} → {hi}\n")
 
+
+def _created_on_or_before(line: str, today_iso: str) -> bool:
+    """First DATE literal on an itsm VALUES row is issue_created_date."""
+    m = re.search(r"DATE '(\d{4}-\d{2}-\d{2})'", line)
+    return bool(m) and m.group(1) <= today_iso
+
+
 failures = []
 
 
@@ -92,6 +99,23 @@ for label, mod in [
         check("HIGHEST" in blob or "BLOCKER" in blob,
               "itsm emits HIGHEST/BLOCKER — Quality counts only those")
         check(any(e in blob for e in roster_emails), "itsm carries roster assignee_email")
+        # Every developer needs issues, or per-dev Quality/Impact is noise.
+        covered = {e for e in roster_emails if e in blob}
+        check(len(covered) == len(roster_emails),
+              f"itsm covers all {len(roster_emails)} developers (got {len(covered)})")
+        # The ETL window ends TODAY, so rows dated after today are not counted
+        # yet. Enough defects must land on or before today for Quality to work.
+        today_iso = date.today().isoformat()
+        in_window = [l for l in blob.splitlines()
+                     if l.startswith("  ('jira'") and _created_on_or_before(l, today_iso)]
+        defects_in_window = [l for l in in_window if "'bug'" in l
+                             and ("HIGHEST" in l or "BLOCKER" in l)]
+        check(len(defects_in_window) >= 5,
+              f"at least 5 high-priority defects created on or before today "
+              f"(got {len(defects_in_window)}; rows after today are invisible "
+              f"until their date arrives)")
+        print(f"  INFO  itsm rows created <= today: {len(in_window) // 2} "
+              f"of {blob.count(chr(10) + '  (') // 2}")
     if label == "gha_runs":
         check("record_inserted_by" in stmts[0], "gha_runs sets record_inserted_by")
         check("TIMESTAMP" in blob, "gha_runs populates record_insert_datetime (ETL filters on it)")

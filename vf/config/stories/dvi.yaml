@@ -75,9 +75,14 @@ low_priority_labels:              # deliberately NOT counted by Quality
 # issue_status is in the completion set and issue_resolution_date is non-null.
 # Thresholds excellent 12 / good 8 / needsImprovement 3, so:
 #   3 -> 50   6 -> 65   8 -> 75   10 -> 88   12+ -> 100
-# This is a COUNT, so it saturates fast — vf_itsm.py drives its whole volume
-# from these numbers rather than from a per-developer rate, otherwise a natural
-# issue volume (~200 features/month for 25 devs) pins the tile at 100.
+# ADVISORY ONLY — these numbers document what the tile would need to stay on
+# its curve, they no longer drive volume. Driving volume backwards from them gave
+# 20 issues a month for 25 developers: 5 people had no Jira issue at all and only
+# 2 defects existed, so per-developer Quality and Impact were noise. Impact
+# cannot track its curve for a realistic team (25 devs completing 2 features each
+# is 50/month against a threshold of 12), so it saturates at 100 like Throughput
+# and the per-developer path carries the spread. Volume comes from
+# issues_per_dev_per_week below.
 features_per_month_start: 5
 features_per_month_end: 12
 deploys_per_week_start: 4
