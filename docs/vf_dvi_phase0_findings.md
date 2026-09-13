@@ -238,3 +238,52 @@ covered, 18 high-priority defects on or before today, leakage ≈ 8%.
 Only Velocity lands mid-curve. That is a property of the tile design, not of the
 seed: three of the five dimensions are COUNT metrics with thresholds calibrated
 for something much smaller than a real team.
+
+---
+
+## 10. Phase 2/3 complete — Databricks side verified (2026-09-13)
+
+Final smoke-window state for `demo-acme-vf`, September 2026:
+
+| table | rows |
+|---|---|
+| `source_to_stage.raw_github_commits_rest_api` | 2,061 |
+| `source_to_stage.raw_github_pull_requests_rest_api_prs` | 250 |
+| `source_to_stage.github_actions_runs_rest_api` | 951 |
+| `transform_stage.mt_itsm_issues_hist` / `_current` | 395 each |
+| `source_to_stage.raw_github_teams_members` | 25 |
+| `master_data.github_copilot_orgs_mapping` | 1 |
+
+Verified against the ETL's own predicates (`verify_scoped.py`):
+
+- **Identity joins cleanly** — 25 commit emails, 25 ITSM assignee emails, 25 PR
+  logins, with 25/25 overlap on both joins and zero null emails.
+- **Velocity** 17.00h median cycle on 250 merged PRs, 0 rows lost to the
+  insert-date gate.
+- **Quality** 162 in-window issues, 9 high-priority defects, 5.56% leakage.
+- **Impact** 47 resolved features in the current month.
+- **Security** per-repo GHA pass rates 97.4–100%, 54–58 security-gate runs per repo.
+- **Team labels** without collateral damage — `v_github_teams_members_current`
+  still shows `opsera-it-networking` 5,190 and `demo-acme-direct` 100 alongside
+  our 25, so the global-MAX trap (BUGS.md #2) was avoided by matching the
+  existing max exactly rather than writing a newer timestamp.
+
+**The seed is also reproducible now.** `seeded()` originally used Python's
+`hash()`, whose string hashing is salted per process, so identical inputs gave
+different data each run (row counts drifted 2082 → 2076 → 2055).
+`sqlutil.stable_seed()` (md5) fixes it. The shared `generators/` modules still
+have this — `generators/commits.py:85` hashes a str — so a vnxt re-seed is not
+byte-reproducible either.
+
+### What is still unverified
+
+Everything above is the Databricks half. Three things can only be confirmed from
+the application side:
+
+1. Does the scheduled ETL run (requires `NODE_ENV=production` on the demo env)?
+2. Does `individuals[]` populate — i.e. do the 25 developers survive the ETL's
+   identity resolution end to end?
+3. Is a mapping group scoped to `demo-acme-vf`, so the tiles read our cohort
+   rather than the whole catalog?
+
+Until (2) is confirmed there is no point seeding the full 16-month arc.

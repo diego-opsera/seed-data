@@ -256,7 +256,7 @@ documenting which ETL path each knob feeds, plus `narrative_beats` for trend sha
 passing) and `vf/generators/story.py` (forward-dating loader + roster accessors that refuse an
 unvalidated roster). Arc runs 2025-09-13 → 2026-12-31 and rolls forward with today.
 
-### Phase 2 — Generators (`vf/generators/`)
+### Phase 2 — Generators (`vf/generators/`) — **DONE 2026-09-13**
 New package so nothing vnxt reads is touched. Every generator scopes deletes to the new org.
 
 | # | Generator | Table | Feeds |
@@ -277,7 +277,7 @@ payload, not flat columns.
 Non-negotiable across all seven: PRs **created and merged in the current calendar month** at a
 believable run-rate, and one consistent email per developer.
 
-### Phase 3 — Run, then wait for the scheduled ETL
+### Phase 3 — Run, then wait for the scheduled ETL — **smoke window DONE 2026-09-13**
 `vf/notebooks/dvi/insert.py` (+ `delete.py` scoped to the new org), run from a Databricks notebook.
 
 Nothing appears in the UI until the ETL materializes `vf_dvi`, but **no manual trigger is needed**: the
