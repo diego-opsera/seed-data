@@ -23,7 +23,7 @@
 import json
 
 CATALOG = "playground_prod"
-JSON_SAMPLE_CHARS = 2500   # truncate payload blobs so the output stays pasteable
+JSON_SAMPLE_CHARS = 900    # hard cap — a single raw PR payload is ~18KB
 
 
 def sql(q):
@@ -112,7 +112,10 @@ out("prs.ddl", ddl(T))
 
 T = f"{CATALOG}.source_to_stage.raw_github_pull_requests_rest_api_prs_details"
 out("prs_details.schema", schema(T))
-out("prs_details.sample", rows(f"SELECT * FROM {T}", 2))
+# EXCEPT the blob — selecting `details` through rows() emits ~20KB per row.
+out("prs_details.non_json_sample", rows(f"SELECT * EXCEPT (details) FROM {T}", 3))
+out("prs_details.payload_keys", json_keys(T, "details"))
+out("prs_details.payload_sample", json_payload(T, "details"))
 
 # ── 2. Commits (JSON: commit_details) ───────────────────────────────────────
 T = f"{CATALOG}.source_to_stage.raw_github_commits_rest_api"
@@ -142,7 +145,13 @@ out("itsm_current.schema", schema(T))
 out("itsm_current.row_count_by_customer", rows(f"""
     SELECT customer_id, COUNT(*) AS n FROM {T} GROUP BY 1 ORDER BY n DESC
 """, 15))
-out("itsm_current.sample", rows(f"SELECT * FROM {T}", 1))
+out("itsm_current.dvi_columns_sample", rows(f"""
+    SELECT itsm_source, issue_key, issue_type, issue_status, issue_priority,
+           assignee_name, assignee_email, story_points,
+           issue_created_date, issue_updated_date, issue_resolution_date,
+           customer_id
+    FROM {T}
+""", 2))
 
 T = f"{CATALOG}.transform_stage.mt_itsm_issues_hist"
 out("itsm_hist.schema", schema(T))
