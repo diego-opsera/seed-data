@@ -41,7 +41,8 @@ os.chdir(REPO_ROOT)
 CATALOG = "playground_prod"
 VF_MODE = globals().get("VF_MODE", "smoke")
 
-from vf.generators import vf_gha_runs, vf_github_commits, vf_github_prs, vf_itsm
+from vf.generators import (vf_gha_runs, vf_github_commits, vf_github_prs, vf_itsm,
+                          vf_org_mapping, vf_teams_members)
 from vf.generators.story import load_dvi_story, load_entities
 
 entities = load_entities()
@@ -74,11 +75,57 @@ GENERATORS = [
 total_stmts = 0
 for label, mod in GENERATORS:
     stmts = mod.generate(CATALOG, entities, story, date_from=lo, date_to=hi)
-    n_rows = sum(s.count("\n  (") for s in stmts)
+    n_rows = sum(s.count("\n  (") for s in stmts) - len(stmts)  # minus the column-list line
     print(f"  {label}: {len(stmts)} statements, ~{n_rows} rows")
     for s in stmts:
         spark.sql(s)
     total_stmts += len(stmts)
+
+# ── Team labels — org mapping + members, resolved against the live global max ──
+# v_github_teams_members_current filters on a single global
+# MAX(record_update_datetime) with no org scoping, so our rows must match it
+# EXACTLY: higher hides every other org, lower hides ours (BUGS.md #2).
+TM = f"{CATALOG}.source_to_stage.raw_github_teams_members"
+global_max = spark.sql(f"SELECT MAX(record_update_datetime) AS m FROM {TM}").collect()[0]["m"]
+print(f"\n  teams_members global MAX(record_update_datetime) = {global_max}")
+
+if global_max is None:
+    print("  SKIP teams_members — table is empty, cannot match the global max")
+else:
+    already = spark.sql(
+        f"SELECT COUNT(*) AS n FROM {CATALOG}.{vf_org_mapping.TABLE} "
+        f"WHERE org_name = '{org}'"
+    ).collect()[0]["n"]
+    if already:
+        print(f"  org mapping row already present for {org} — skipping")
+    else:
+        for stmt in vf_org_mapping.generate(CATALOG, entities, story):
+            spark.sql(stmt)
+            total_stmts += 1
+        print(f"  org mapping (github_copilot_orgs_mapping): 1 row")
+
+    stmts = vf_teams_members.generate(
+        CATALOG, entities, story,
+        record_update_datetime=str(global_max),
+    )
+    for stmt in stmts:
+        spark.sql(stmt)
+    total_stmts += len(stmts)
+    print(f"  teams members (raw_github_teams_members): {len(entities['users'])} rows "
+          f"at record_update_datetime = {global_max}")
+
+    # Confirm we neither hid another org nor missed the window.
+    check = spark.sql(f"""
+        SELECT org_name, COUNT(*) AS n
+        FROM {CATALOG}.base_datasets.v_github_teams_members_current
+        GROUP BY org_name ORDER BY n DESC
+    """).collect()
+    print("\n  v_github_teams_members_current now shows:")
+    for r in check:
+        print(f"    {r['org_name']}: {r['n']}")
+    if not any(r["org_name"] == org for r in check):
+        print(f"    WARNING {org} is absent — the global max moved between the read")
+        print("            and the insert, or the org mapping row is missing")
 
 print(f"\ninserted via {total_stmts} statements")
 print("\nNext:")

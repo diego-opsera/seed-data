@@ -26,7 +26,8 @@ os.chdir(REPO_ROOT)
 
 CATALOG = "playground_prod"
 
-from vf.generators import vf_gha_runs, vf_github_commits, vf_github_prs, vf_itsm
+from vf.generators import (vf_gha_runs, vf_github_commits, vf_github_prs, vf_itsm,
+                          vf_org_mapping, vf_teams_members)
 from vf.generators.story import load_entities
 
 entities = load_entities()
@@ -37,7 +38,8 @@ print(f"org     : {org}  (scoped by org + record_inserted_by = 'seed-data-vf')")
 print()
 
 # Reverse of insert order.
-for mod in (vf_gha_runs, vf_itsm, vf_github_prs, vf_github_commits):
+for mod in (vf_teams_members, vf_org_mapping, vf_gha_runs, vf_itsm,
+            vf_github_prs, vf_github_commits):
     for stmt in mod.delete_sql(CATALOG, entities):
         print("  " + stmt)
         spark.sql(stmt)

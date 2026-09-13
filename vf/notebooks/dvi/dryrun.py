@@ -70,7 +70,7 @@ for label, mod in [
     ("gha_runs", vf_gha_runs),
 ]:
     stmts = mod.generate(CATALOG, entities, story, date_from=lo, date_to=hi)
-    rows = sum(s.count("\n  (") for s in stmts)
+    rows = sum(s.count("\n  (") for s in stmts) - len(stmts)  # minus the column-list line
     print(f"### {label}: {len(stmts)} statements, ~{rows} rows")
     check(rows > 0, f"{label} produced rows")
     check(all(s.rstrip().endswith(";") for s in stmts), f"{label} statements terminated")

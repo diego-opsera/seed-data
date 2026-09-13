@@ -27,7 +27,7 @@ from datetime import date, timedelta
 from generators.utils import active_user_count, day_scale
 
 from .sqlutil import (arc_t, beat_for, chunked_inserts, iso_z, json_lit, lerp,
-                      seeded, sha, sq, ts)
+                      seeded, sha, sq, stable_seed, ts)
 
 TABLE = "source_to_stage.raw_github_commits_rest_api"
 COLUMNS = "commit_details, org_name, owner, record_insert_datetime, record_inserted_by"
@@ -69,7 +69,7 @@ def generate(catalog: str, entities: dict, story: dict, *,
             ext = _LANG_EXT.get(user.get("language", "python"), "py")
 
             for seq in range(n):
-                s = abs(hash((str(day), user["id"], seq, "c"))) % (2**31)
+                s = stable_seed(day, user["id"], seq, "c")
                 commit_sha = sha(s)
                 crng = seeded(day, user["id"], seq, "cd")
                 adds = crng.randint(round(lerp(12, 40, t)), round(lerp(70, 180, t)))

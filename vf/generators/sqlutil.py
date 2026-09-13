@@ -7,6 +7,7 @@ huge (a raw PR payload is 18KB, a commit 47KB) because they are verbatim GitHub
 REST responses — we emit only the paths the ETL actually reads, which keeps the
 seed small and the intent legible.
 """
+import hashlib
 import json
 import random
 
@@ -33,6 +34,20 @@ def json_lit(obj) -> str:
     return sq(json.dumps(obj, separators=(",", ":")))
 
 
+def stable_seed(*parts) -> int:
+    """
+    Process-stable integer seed from arbitrary parts.
+
+    NOT Python's hash(): str hashing is salted per process (PYTHONHASHSEED), so
+    hash(('2026-09-01', 123)) differs between runs. The shared generators/ modules
+    use hash() and are therefore non-reproducible across processes — visible here
+    as row counts drifting 2082 -> 2076 -> 2055 on identical inputs. md5 keeps a
+    re-seed byte-identical, which matters when delete.py + insert.py are re-run.
+    """
+    key = "\u0000".join(str(p) for p in parts).encode()
+    return int.from_bytes(hashlib.md5(key).digest()[:8], "big") % (2**31)
+
+
 def sha(seed: int) -> str:
     """Deterministic 40-char hex that looks like a git SHA."""
     return "".join(random.Random(seed).choices("0123456789abcdef", k=40))
@@ -40,7 +55,7 @@ def sha(seed: int) -> str:
 
 def seeded(*parts) -> random.Random:
     """Stable RNG from arbitrary parts — same inputs always give the same output."""
-    return random.Random(abs(hash(tuple(str(p) for p in parts))) % (2**31))
+    return random.Random(stable_seed(*parts))
 
 
 def iso_z(day, hour=12, minute=0) -> str:

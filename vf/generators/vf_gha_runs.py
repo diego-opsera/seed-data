@@ -27,7 +27,7 @@ are silently excluded.
 from datetime import date, timedelta
 
 from .sqlutil import (arc_t, beat_for, chunked_inserts, iso_z, json_lit, lerp,
-                      seeded, sha, sq, ts)
+                      seeded, sha, sq, stable_seed, ts)
 
 TABLE = "source_to_stage.github_actions_runs_rest_api"
 COLUMNS = ("repo_url, message, owner, record_updated_timestamp, "
@@ -86,7 +86,7 @@ def generate(catalog: str, entities: dict, story: dict, *,
                 hour = rng.randint(8, 19)
                 ok = rng.random() < pass_rate
                 conclusion = "success" if ok else rng.choice(["failure", "failure", "cancelled"])
-                head_sha = sha(abs(hash((repo["name"], run_number))) % (2**31))
+                head_sha = sha(stable_seed(repo["name"], run_number))
 
                 payload = {
                     "id": 30_000_000_000 + run_number,
