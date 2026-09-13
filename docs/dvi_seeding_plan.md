@@ -25,8 +25,10 @@ See also [visualforge_seeding_insights.md](visualforge_seeding_insights.md).
 > 3. **Security can't be fixed by seeding.** Tier 1 is whole-table with no org or date filter, so 744
 >    other-org open vulnerabilities pin it at 3.8/100. Route around it via per-dev GHA-per-repo pass
 >    rates (BUGS.md #14 files the product bug).
-> 4. **September 2026 is empty catalog-wide** (ingestion stopped ~2026-08-02), so seeding the current
->    month makes `demo-acme-vf` the *only* org in the latest-month snapshot — a free scoping win.
+> 4. **The catalog is a one-time prod copy cut off ~2026-08-02**, so the dashboard **zeroes out by
+>    itself on 2026-10-01** — the snapshot falls back only one month and both September and October are
+>    empty. The seed must be **forward-dated through at least 2026-12**, which also makes
+>    `demo-acme-vf` the only org in the latest-month snapshot (a free scoping win).
 >
 > Also closed: `date_dim` covers 2018→2030 (no work needed), `demo-acme-vf` is unused, and none of the
 > 5 missing tables block the tiles — **Phase 2 needs no DDL**. Two of our own generators have verified
@@ -268,14 +270,20 @@ payload, not flat columns.
 Non-negotiable across all seven: PRs **created and merged in the current calendar month** at a
 believable run-rate, and one consistent email per developer.
 
-### Phase 3 — Run + ETL
-`vf/notebooks/dvi/insert.py` (+ `delete.py` scoped to the new org), then — and this is the step that has no
-vnxt equivalent — **trigger the ETL**:
-```
-POST /api/v1/databricks/etl/sync/dvi        { months: 12 }
-```
-Nothing appears in the UI until this runs. In dev the scheduler is inert (`NODE_ENV` gate), and there's
-a process-wide ETL lock, so this serializes against any other sync.
+### Phase 3 — Run, then wait for the scheduled ETL
+`vf/notebooks/dvi/insert.py` (+ `delete.py` scoped to the new org), run from a Databricks notebook.
+
+Nothing appears in the UI until the ETL materializes `vf_dvi`, but **no manual trigger is needed**: the
+backend registers its own scheduler (`routes/index.routes.js:197`) that runs `syncAllConceptViews` —
+including `syncDvi` — 30s after boot and daily at `ETL_SYNC_HOURS` (default **07:00 / 19:00 UTC**), per
+tenant, using each tenant's resolved catalog. It is gated on `NODE_ENV=production|test`.
+
+So the operating loop is: seed from the notebook → wait for the next scheduled sync → check the UI.
+`POST /etl/sync/dvi` exists if someone wants it sooner, but it is not required.
+
+**Verification without Mongo or API access:** the Databricks half can be proven from the notebook alone
+by re-running `diag_dimensions.py` scoped to `demo-acme-vf` — if the dimensions resolve there, the rows
+satisfy the ETL's predicates. Only the Mongo half (`individuals[]`, mapping scope) needs the UI.
 
 ### Phase 4 — Mapping group (required, per §1c)
 Create a VisualForge mapping group scoped to the new org — repos, Jira project, member emails — so

@@ -77,7 +77,7 @@ Adding `demo-acme-vf` vulnerabilities cannot fix this — to drag 42/786 up to ~
   dimension. Worth filing — it makes the Security tile meaningless on any multi-tenant catalog.
 - Resolve the 744 open rows. Not ours to touch (other orgs' data).
 
-## 4. Catalog-wide ingestion stopped ~2026-08-02 — and that's an opportunity
+## 4. The catalog is a one-time prod copy with an ~2026-08-02 cutoff — so the dashboard decays
 
 | Source | Last data |
 |---|---|
@@ -86,12 +86,34 @@ Adding `demo-acme-vf` vulnerabilities cannot fix this — to drag 42/786 up to ~
 | `raw_mongo_pipelineactivities` | 2026-08 (5203 vs 184755 in July) |
 | `v_itsm_issues_hist` | `max_created = 2026-08-28` |
 
-**September 2026 is completely empty, catalog-wide.** The snapshot only falls back one month, so it's
-currently reading a partial August.
+This is **not** broken ingestion — `playground_prod` is a one-time copy from real prod (confirmed
+2026-09-13), so the cutoff is by design and the data is accurate as a static dataset. But it never
+advances, and that has a dated consequence.
 
-This is a lever rather than a problem: if `demo-acme-vf` seeds **September 2026** PRs, it will be the
-*only* org with current-month data, so the latest-month snapshot becomes **100 % ours** — Velocity and
-Throughput get scoped to our cohort without needing a mapping group at all.
+### The dashboard goes dark on 2026-10-01 by itself
+
+`buildMonthKeys(12)` always ends at the **current** month (`queryHelpers.js:129`), and the snapshot
+falls back exactly **one** month: `latestPr = prByMonth.get(latestMk) ?? prByMonth.get(prevMk)`
+(`syncDvi.js:1233`).
+
+| Date | `latestMk` | `prevMk` | Velocity / Throughput |
+|---|---|---|---|
+| today (2026-09-13) | 2026-09 — empty | 2026-08 — has data | works |
+| from 2026-10-01 | 2026-10 — empty | 2026-09 — empty | **0** |
+
+So Velocity and Throughput zero out on 1 October regardless of anything we seed, and the last two
+trend buckets flatten to 0. Any demo built on the copied data has ~18 days of life left.
+
+### Which makes forward-dating the seed the fix, not just a nicety
+
+`demo-acme-vf` should seed **through at least 2026-12**, not just up to today. Every ETL query is
+bounded by `TO_DATE = currentDate()`, so future-dated rows are simply excluded until their month
+arrives — harmless now, and the demo keeps working as the calendar advances instead of needing a
+re-seed every month.
+
+It also hands us a free scoping win: because nothing else in the catalog has data after 2026-08-02,
+our rows will be the **only** ones in the latest-month snapshot. Velocity and Throughput become
+effectively cohort-scoped without a mapping group at all.
 
 ## 5. Two verified defects in our own generators
 
@@ -135,23 +157,28 @@ show 0 % leakage — reading as *perfect quality* rather than a real number.
 
 ## 7. Still open
 
-1. **Which catalog does the VisualForge app resolve to?** The notebook session reported
-   `productionworkspace_us_east_2` / `default`, which tells us nothing about the app. Needs
-   `GET /api/v1/databricks/verify-catalog` or the `DATABRICKS_CATALOG` value from
-   `unified-backend/.env`. **If it isn't `playground_prod`, everything above describes the wrong
-   catalog.** This is now the single highest-priority unknown.
-2. **Has `POST /etl/sync/dvi` ever run against this catalog?** Check `GET /etl/status` and the
-   `vf_dvi` doc's `syncedAt`. If it's stale, the UI may already improve with no seeding at all.
-3. **Is a mapping group active on the demo tenant, and does it carry selectors?**
+1. ~~Which catalog does the app resolve to?~~ **Closed 2026-09-13 — `playground_prod` confirmed.**
+   Everything above describes the right catalog.
+2. ~~Has the DVI ETL run?~~ **Not an action item.** The backend registers its own scheduler
+   (`routes/index.routes.js:197`): `syncAllConceptViews` — which includes `syncDvi` — fires 30s after
+   boot and then daily at `ETL_SYNC_HOURS` (default **07:00 and 19:00 UTC**), per tenant, with each
+   tenant's own resolved catalog prefix. Gated on `NODE_ENV=production|test` and
+   `DATABRICKS_SYNC_INTERVAL_MS !== '0'`. So seeded rows reach Mongo on the next scheduled run with no
+   manual trigger — provided the demo environment runs with `NODE_ENV=production`.
+   *(Note: `ETL_SCHEDULER_GUIDE.md` says this lives in `app.js:153-199`. It does not — that file has
+   no scheduler. The real implementation is `src/routes/index.routes.js`.)*
+3. **Is a mapping group active on the demo tenant, and does it carry selectors?** Still open.
+4. **Does the demo environment run `NODE_ENV=production`?** If it's a dev instance, no scheduler
+   registers and nothing we seed will ever reach the dashboard.
 
 ## 8. Revised plan implications
 
 | Plan item | Status after Phase 0 |
 |---|---|
-| Phase 0 diagnose | **Done**, except the app-side catalog check (§7.1) |
+| Phase 0 diagnose | **Done.** Catalog confirmed as `playground_prod` |
 | "Seed the 5 dimensions to kill N/A" | **Wrong framing** — they already resolve; fix scope/ETL first |
 | Per-developer `individuals[]` rows | **Promoted to the primary goal** (§2) |
-| Seed current-month PRs | **Confirmed critical**, and now a scoping shortcut (§4) |
+| Seed current-month PRs | **Confirmed critical** — and extend forward through 2026-12, because the static copy makes the dashboard zero out on 2026-10-01 (§4) |
 | `date_dim` verification | **Closed** — no work needed |
 | Missing-table DDL | **Dropped** — none of the 5 blocks the tiles |
 | Security via Sonar/ASP seeding | **Replaced** by the GHA-per-repo per-dev route (§3) |
