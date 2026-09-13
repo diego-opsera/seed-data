@@ -1,0 +1,126 @@
+name: "dvi"
+
+# DVI narrative for demo-acme-vf.
+#
+# start_date / end_date are NOT set here. generators.utils.load_story() computes
+# start_date = today - window_days and end_date = today; vf.generators.story
+# .load_dvi_story() then pushes end_date FORWARD by `forward_days`.
+#
+# WHY FORWARD-DATE: playground_prod is a one-time copy from real prod with an
+# ~2026-08-02 cutoff, and the DVI snapshot falls back exactly one month
+# (syncDvi.js:1233) while buildMonthKeys always ends at the current month. From
+# 2026-10-01 both October and September are empty catalog-wide, so Velocity and
+# Throughput zero out on their own. Seeding past today keeps the demo alive as
+# the calendar advances — every ETL query is bounded by TO_DATE = currentDate(),
+# so future-dated rows stay invisible until their month arrives.
+forward_days: 109          # rolling ~3.5 months past today (today + 109d)
+
+# Roster is explicit in vf/config/entities.yaml and validated by
+# vf/generators/identity_gates.py. Keeping user_count_end == len(users) stops
+# generators.utils.expand_users() from auto-appending demo-user-NNN logins that
+# would bypass that validation.
+user_count_start: 25
+user_count_end: 25
+
+noise_pct: 12
+
+# ── Day scaling (same semantics as the shared narrative story) ──────────────
+weekend_multiplier: 0.0
+holiday_multiplier: 0.05
+emergency_weekend_multiplier: 0.25
+
+# ── DVI dimension targets ───────────────────────────────────────────────────
+# Each block names the dimension it drives and the ETL path that consumes it.
+# Values ramp start → end across the arc; see generators.utils.lerp / trend_base.
+
+# VELOCITY — snapshot.velocity = median PR (merged_at - created_at) in hours for
+# the latest month. dviConfig thresholds: excellent 4 / good 8 / needsImprovement 24
+# (inverted). 96h → 26h is a credible "we fixed our review bottleneck" arc that
+# lands in 'good' rather than pinning the tile at 100 the way sub-1h values do.
+pr_cycle_hours_start: 96
+pr_cycle_hours_end: 26
+
+# THROUGHPUT — snapshot.throughput = merged PR COUNT for the latest month
+# (despite the tile being labelled "story points / sprint"). Threshold
+# excellent = 20, so anything above ~20/month saturates. Per-developer
+# throughput normalizes COMMITS against the org P90 instead, which is where the
+# real spread comes from.
+prs_per_dev_per_week_start: 1.1
+prs_per_dev_per_week_end: 2.4
+commits_per_dev_per_day_start: 1.8
+commits_per_dev_per_day_end: 3.6
+
+# QUALITY — defect leakage % = high-priority defects ÷ total issues.
+# CRITICAL: only priorities in BLOCKER / CRITICAL / HIGHEST / 1 / 1 - CRITICAL
+# are counted (dviQueries.js itsmDefectLeakageQuery). See BUGS.md #13 — the
+# shared itsm generator emits high/medium/low, which count as zero.
+# Thresholds: excellent 5 / good 15 / needsImprovement 25 (inverted).
+defect_share_start: 0.19          # 19% of issues are high-priority defects
+defect_share_end: 0.07
+issues_per_dev_per_week_start: 2.2
+issues_per_dev_per_week_end: 3.1
+high_priority_labels:             # rotated across counted defects
+  - "HIGHEST"
+  - "BLOCKER"
+low_priority_labels:              # deliberately NOT counted by Quality
+  - "MEDIUM"
+  - "LOW"
+
+# IMPACT — snapshot.impact = COUNT of completed feature issues (story / feature /
+# new feature / enhancement / epic / user story / product backlog item) whose
+# issue_status is in the completion set and issue_resolution_date is non-null.
+# Threshold excellent = 12, so a month of ~10-16 features reads meaningfully
+# instead of saturating. The historical trend uses DEPLOY counts, not features.
+features_per_month_start: 6
+features_per_month_end: 16
+deploys_per_week_start: 4
+deploys_per_week_end: 14
+
+# SECURITY — tier 1 (asp_sonar_issues, whole-catalog, unscoped) pins the org
+# number at ~4/100 and cannot be fixed by seeding; see BUGS.md #14. Our route is
+# per-developer: syncDvi scores each dev from GHA workflow pass rate PER REPO
+# ('gha-per-repo') before falling back to the org number. So GHA runs on our
+# repos are what actually move Security for the demo cohort.
+gha_success_rate_start: 0.74
+gha_success_rate_end: 0.95
+gha_runs_per_repo_per_day_start: 3
+gha_runs_per_repo_per_day_end: 8
+# Workflow names must match syncDvi's security-gate patterns to count.
+security_workflow_names:
+  - "CodeQL Analysis"
+  - "Security Scan"
+  - "Dependency Scan"
+  - "Unit Test Suite"
+  - "Lint and Quality Gate"
+# Sonar quality gates (tier 2) — still seeded so the monthly security series and
+# per-author quality have data even though tier 1 wins the org-level number.
+sonar_gate_pass_rate_start: 0.80
+sonar_gate_pass_rate_end: 0.96
+sonar_projects_per_month: 5
+
+# ── Narrative beats ─────────────────────────────────────────────────────────
+# Throughput and Impact self-normalize against their OWN P90, so a pure linear
+# ramp flattens to ~100 across the board. These multipliers give the trend real
+# shape: a Q1 platform migration that costs velocity, then recovery.
+# Keys are offsets in months from the arc start (0 = first month).
+narrative_beats:
+  4:  { label: "platform migration starts", throughput: 0.72, velocity: 1.35, quality: 1.30 }
+  5:  { label: "migration peak disruption", throughput: 0.61, velocity: 1.55, quality: 1.45 }
+  6:  { label: "migration lands",           throughput: 0.88, velocity: 1.15, quality: 1.10 }
+  9:  { label: "AI assistants roll out",    throughput: 1.18, velocity: 0.82, quality: 0.88 }
+  12: { label: "steady state",              throughput: 1.25, velocity: 0.75, quality: 0.80 }
+
+# IDE assignment for named roster members (rest distributed by index)
+user_ide_map:
+  ava.mitchell:  vscode
+  lucas.moreau:  intellij
+  raj.malhotra:  vscode
+  marco.bianchi: xcode
+
+active_features:
+  - code_completion
+  - chat_panel_ask_mode
+  - chat_panel_edit_mode
+  - agent_edit
+
+security_spikes: false

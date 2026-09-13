@@ -1,0 +1,163 @@
+# demo-acme-vf — VisualForge demo org.
+#
+# Deliberately separate from the shared /config/entities.yaml, which owns
+# demo-acme-engineering (core batch) and demo-acme-direct (direct batch) for
+# vnxt-insights-api. Nothing here overlaps those orgs.
+#
+# IDENTITY IS THE CONTRACT. VisualForge's DVI and Tokenomics ETLs join every
+# source on LOWER(TRIM(email)) and drop any row whose identity fails the gates
+# in sharedIdentity.js. The `email` below is therefore the join key that every
+# vf/ generator must reuse verbatim — in commits (commit_email), PRs
+# (github_commit_email / author email), Jira (assignee_email), Sonar (author)
+# and AI tool usage. One mismatch silently removes a developer from
+# individuals[] with no error anywhere.
+#
+# Roster validated against all five gates by vf/generators/identity_gates.py.
+
+enterprise:
+  id: 999999
+  name: "demo-acme-corp"
+
+orgs:
+  - id: 9990003
+    name: "demo-acme-vf"           # VisualForge batch — safe to wipe independently
+
+# GitHub org login used in repo full_name and PR/commit payloads.
+github_org: "demo-acme-vf"
+
+teams:
+  - name: "vf-platform"
+    slug: "vf-platform"
+    org_name: "demo-acme-vf"
+  - name: "vf-payments"
+    slug: "vf-payments"
+    org_name: "demo-acme-vf"
+  - name: "vf-data"
+    slug: "vf-data"
+    org_name: "demo-acme-vf"
+  - name: "vf-mobile"
+    slug: "vf-mobile"
+    org_name: "demo-acme-vf"
+
+# Repos. `team` binds a repo to its owning team so commits/PRs/GHA runs stay
+# coherent per developer. html_url doubles as project_url in base_datasets.
+repos:
+  - name: "demo-acme-vf/platform-api"
+    html_url: "https://github.com/demo-acme-vf/platform-api"
+    team: "vf-platform"
+  - name: "demo-acme-vf/payments-service"
+    html_url: "https://github.com/demo-acme-vf/payments-service"
+    team: "vf-payments"
+  - name: "demo-acme-vf/data-pipeline"
+    html_url: "https://github.com/demo-acme-vf/data-pipeline"
+    team: "vf-data"
+  - name: "demo-acme-vf/mobile-app"
+    html_url: "https://github.com/demo-acme-vf/mobile-app"
+    team: "vf-mobile"
+  - name: "demo-acme-vf/web-console"
+    html_url: "https://github.com/demo-acme-vf/web-console"
+    team: "vf-platform"
+
+# Jira project backing v_itsm_issues_hist rows for this org.
+jira_project:
+  key: "VFD"
+  name: "VisualForge Delivery"
+
+# ── Roster ──────────────────────────────────────────────────────────────────
+# 25 developers. Constraints each row satisfies (see identity_gates.py):
+#   login  — ^[a-z0-9._-]{3,}$, no 'svc'/'service'/'admin' substring, not all
+#            digits, not bot-like (no '-bot', '[bot]', 'dependabot', 'copilot*',
+#            'github-actions*', 'renovate', 'web-flow', 'agent', 'cursoragent')
+#   email  — real address; local part <=12 chars passes outright, longer local
+#            parts must not look like a hashed token (a '.' separator is enough)
+#   name   — derived by the ETL as emailToName(email), so 'first.last' yields
+#            'First Last' and initials 'FL'. First token must not be an opaque
+#            20+ char token.
+users:
+  # vf-platform
+  - { id: 9990301, login: "ava.mitchell",   email: "ava.mitchell@demo-acme-vf.com",   name: "Ava Mitchell",   team: "vf-platform", role: "Staff Engineer" }
+  - { id: 9990302, login: "noah.brennan",   email: "noah.brennan@demo-acme-vf.com",   name: "Noah Brennan",   team: "vf-platform", role: "Senior Engineer" }
+  - { id: 9990303, login: "priya.nair",     email: "priya.nair@demo-acme-vf.com",     name: "Priya Nair",     team: "vf-platform", role: "Senior Engineer" }
+  - { id: 9990304, login: "diego.ferrer",   email: "diego.ferrer@demo-acme-vf.com",   name: "Diego Ferrer",   team: "vf-platform", role: "Engineer" }
+  - { id: 9990305, login: "mei.tanaka",     email: "mei.tanaka@demo-acme-vf.com",     name: "Mei Tanaka",     team: "vf-platform", role: "Engineer" }
+  - { id: 9990306, login: "samir.haddad",   email: "samir.haddad@demo-acme-vf.com",   name: "Samir Haddad",   team: "vf-platform", role: "Engineer" }
+  - { id: 9990307, login: "erin.kowalski",  email: "erin.kowalski@demo-acme-vf.com",  name: "Erin Kowalski",  team: "vf-platform", role: "Junior Engineer" }
+  # vf-payments
+  - { id: 9990308, login: "lucas.moreau",   email: "lucas.moreau@demo-acme-vf.com",   name: "Lucas Moreau",   team: "vf-payments", role: "Staff Engineer" }
+  - { id: 9990309, login: "hana.park",      email: "hana.park@demo-acme-vf.com",      name: "Hana Park",      team: "vf-payments", role: "Senior Engineer" }
+  - { id: 9990310, login: "omar.said",      email: "omar.said@demo-acme-vf.com",      name: "Omar Said",      team: "vf-payments", role: "Senior Engineer" }
+  - { id: 9990311, login: "clara.vogt",     email: "clara.vogt@demo-acme-vf.com",     name: "Clara Vogt",     team: "vf-payments", role: "Engineer" }
+  - { id: 9990312, login: "tobias.lund",    email: "tobias.lund@demo-acme-vf.com",    name: "Tobias Lund",    team: "vf-payments", role: "Engineer" }
+  - { id: 9990313, login: "ines.carvalho",  email: "ines.carvalho@demo-acme-vf.com",  name: "Ines Carvalho",  team: "vf-payments", role: "Junior Engineer" }
+  # vf-data
+  - { id: 9990314, login: "raj.malhotra",   email: "raj.malhotra@demo-acme-vf.com",   name: "Raj Malhotra",   team: "vf-data", role: "Staff Engineer" }
+  - { id: 9990315, login: "sofia.ribeiro",  email: "sofia.ribeiro@demo-acme-vf.com",  name: "Sofia Ribeiro",  team: "vf-data", role: "Senior Engineer" }
+  - { id: 9990316, login: "yusuf.demir",    email: "yusuf.demir@demo-acme-vf.com",    name: "Yusuf Demir",    team: "vf-data", role: "Engineer" }
+  - { id: 9990317, login: "anna.kovacs",    email: "anna.kovacs@demo-acme-vf.com",    name: "Anna Kovacs",    team: "vf-data", role: "Engineer" }
+  - { id: 9990318, login: "kwame.osei",     email: "kwame.osei@demo-acme-vf.com",     name: "Kwame Osei",     team: "vf-data", role: "Engineer" }
+  - { id: 9990319, login: "lena.fischer",   email: "lena.fischer@demo-acme-vf.com",   name: "Lena Fischer",   team: "vf-data", role: "Junior Engineer" }
+  # vf-mobile
+  - { id: 9990320, login: "marco.bianchi",  email: "marco.bianchi@demo-acme-vf.com",  name: "Marco Bianchi",  team: "vf-mobile", role: "Senior Engineer" }
+  - { id: 9990321, login: "zoe.hartley",    email: "zoe.hartley@demo-acme-vf.com",    name: "Zoe Hartley",    team: "vf-mobile", role: "Senior Engineer" }
+  - { id: 9990322, login: "arjun.bose",     email: "arjun.bose@demo-acme-vf.com",     name: "Arjun Bose",     team: "vf-mobile", role: "Engineer" }
+  - { id: 9990323, login: "nadia.rahimi",   email: "nadia.rahimi@demo-acme-vf.com",   name: "Nadia Rahimi",   team: "vf-mobile", role: "Engineer" }
+  - { id: 9990324, login: "felix.andersen", email: "felix.andersen@demo-acme-vf.com", name: "Felix Andersen", team: "vf-mobile", role: "Engineer" }
+  - { id: 9990325, login: "julia.sokolov",  email: "julia.sokolov@demo-acme-vf.com",  name: "Julia Sokolov",  team: "vf-mobile", role: "Junior Engineer" }
+
+languages:
+  - typescript
+  - python
+  - go
+  - kotlin
+  - csharp
+
+ides:
+  - vscode
+  - intellij
+  - visualstudio
+  - xcode
+
+features:
+  - code_completion
+  - chat_panel_ask_mode
+  - chat_panel_edit_mode
+  - agent_edit
+  - chat_inline
+
+models:
+  - gpt-4o
+  - gpt-4o-mini
+  - claude-4.0-sonnet
+  - claude-4.5-sonnet
+
+# AI assistants for this org. Same schema as the shared entities.yaml so the
+# existing tool helpers (tool_rollout_date / tool_allocation_on /
+# assign_users_to_tool) work unchanged.
+ai_tools:
+  - name: "github copilot"
+    allocation: 25
+    rollout_offset_days: 0
+    active_share: 0.80
+    productivity_mult: 1.00
+    chat_share: 0.35
+    primary_models:
+      - gpt-4o
+      - gpt-4o-mini
+  - name: "cursor"
+    allocation: 12
+    rollout_offset_days: 150
+    active_share: 0.85
+    productivity_mult: 1.25
+    chat_share: 0.55
+    primary_models:
+      - claude-4.0-sonnet
+      - gpt-4o
+  - name: "claude code"
+    allocation: 8
+    rollout_offset_days: 260
+    active_share: 0.90
+    productivity_mult: 1.65
+    chat_share: 0.70
+    primary_models:
+      - claude-4.5-sonnet
+      - claude-4.0-sonnet

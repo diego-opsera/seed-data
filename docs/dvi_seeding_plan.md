@@ -240,7 +240,7 @@ exec(open("/tmp/seed-data/vf/notebooks/dvi/diag_dimensions.py").read())  # repla
 Record the output in `docs/vf_dvi_phase0_findings.md` (same role `docs/exploration.md` played for the
 original Copilot batch).
 
-### Phase 1 — Org + roster foundation
+### Phase 1 — Org + roster foundation — **DONE 2026-09-13**
 - Add `demo-acme-vf` (id `9990003`) to `vf/config/entities.yaml`, with its own repos
   (`demo-acme-vf/{backend,frontend,api-gateway,platform}`) and Jira project key.
 - New `vf/config/stories/dvi.yaml` narrative: a 12-month arc with deliberate month-over-month movement in
@@ -248,6 +248,13 @@ original Copilot batch).
 - Roster of ~25-40 developers with stable `login` + `email`, emails reused verbatim by every generator
   in Phase 2. Emails are the join key — one typo silently drops a developer from `individuals[]`.
 - Verify each login/email against the five gates in §3.
+
+**Delivered:** `vf/config/entities.yaml` (org `demo-acme-vf` id 9990003, 4 teams, 5 repos, Jira project
+`VFD`, 25 developers each with an explicit `email`), `vf/config/stories/dvi.yaml` (per-dimension targets
+documenting which ETL path each knob feeds, plus `narrative_beats` for trend shape),
+`vf/generators/identity_gates.py` (the five gates ported from `sharedIdentity.js`, all 25 verified
+passing) and `vf/generators/story.py` (forward-dating loader + roster accessors that refuse an
+unvalidated roster). Arc runs 2025-09-13 → 2026-12-31 and rolls forward with today.
 
 ### Phase 2 — Generators (`vf/generators/`)
 New package so nothing vnxt reads is touched. Every generator scopes deletes to the new org.

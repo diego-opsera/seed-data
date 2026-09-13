@@ -23,15 +23,45 @@ and [`docs/dvi_seeding_plan.md`](../docs/dvi_seeding_plan.md).
 ```
 vf/
   config/
-    entities.yaml          Phase 1 — demo-acme-vf org, repos, roster
-    stories/dvi.yaml       Phase 1 — 12-month DVI narrative
-  generators/              Phase 2 — one module per Databricks table
+    entities.yaml          demo-acme-vf org, 4 teams, 5 repos, 25-dev roster
+    stories/dvi.yaml       DVI narrative — dimension targets + forward-dating
+  generators/
+    identity_gates.py      port of VisualForge's identity gates + roster check
+    story.py               story loading, forward-dating, roster accessors
+                           (Phase 2 table generators land here)
   notebooks/
     dvi/
       diag_catalog.py      Phase 0 — catalog + schema reachability
       diag_sources.py      Phase 0 — per-table verdict for every DVI source
       diag_dimensions.py   Phase 0 — replays the ETL's own dimension logic
 ```
+
+## Identity is the contract
+
+VisualForge joins commits, PRs, Jira, Sonar and AI usage on `LOWER(TRIM(email))`, and drops any row
+whose identity fails `sharedIdentity.js`. A failure is **silent** — the developer just never appears in
+`individuals[]`, which is the path that drives every dashboard tile once it is non-empty.
+
+So the roster in `config/entities.yaml` carries an explicit `email` per developer, and
+`generators.story.roster()` refuses to return it if any entry would be dropped. Validate any time:
+
+```bash
+python3 -m vf.generators.identity_gates      # prints PASS/FAIL per developer
+python3 -m vf.generators.story               # prints the arc, roster and repo mapping
+```
+
+This is not theoretical: `generators/commits.py` never populates `commit_email`, so all 37,598
+`demo-acme-direct` commits already resolve to zero developers (BUGS.md #12).
+
+## Why the story seeds into the future
+
+`playground_prod` is a one-time copy from real prod with an ~2026-08-02 cutoff. The DVI snapshot falls
+back exactly one month while `buildMonthKeys` always ends at the current month, so from 2026-10-01 both
+October and September are empty and Velocity/Throughput zero out on their own.
+
+`load_dvi_story()` therefore pushes `end_date` past today by the story's `forward_days`. Every ETL query
+is bounded by `TO_DATE = currentDate()`, so future-dated rows stay invisible until their month arrives —
+the demo keeps working as the calendar advances instead of needing a monthly re-seed.
 
 ## Running
 
