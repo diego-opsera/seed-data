@@ -35,10 +35,14 @@ emergency_weekend_multiplier: 0.25
 
 # VELOCITY — snapshot.velocity = median PR (merged_at - created_at) in hours for
 # the latest month. dviConfig thresholds: excellent 4 / good 8 / needsImprovement 24
-# (inverted). 96h → 26h is a credible "we fixed our review bottleneck" arc that
-# lands in 'good' rather than pinning the tile at 100 the way sub-1h values do.
-pr_cycle_hours_start: 96
-pr_cycle_hours_end: 26
+# (INVERTED), and the curve past 24h decays to 0 at 44h. Scores for reference:
+#   72h -> 0    34h -> 25   24h -> 50   17h -> 61   12h -> 69   7h -> 81   5h -> 94
+# So the arc has to END under ~8h to read 'good'; ending at 26h would score 45
+# and render as 'critical'. 72h -> 7h gives a full critical -> good narrative
+# without reaching the sub-1h values that pin the tile at 100 (which is what the
+# org-wide median does today, at 0.32h).
+pr_cycle_hours_start: 72
+pr_cycle_hours_end: 7
 
 # THROUGHPUT — snapshot.throughput = merged PR COUNT for the latest month
 # (despite the tile being labelled "story points / sprint"). Threshold
@@ -69,10 +73,13 @@ low_priority_labels:              # deliberately NOT counted by Quality
 # IMPACT — snapshot.impact = COUNT of completed feature issues (story / feature /
 # new feature / enhancement / epic / user story / product backlog item) whose
 # issue_status is in the completion set and issue_resolution_date is non-null.
-# Threshold excellent = 12, so a month of ~10-16 features reads meaningfully
-# instead of saturating. The historical trend uses DEPLOY counts, not features.
-features_per_month_start: 6
-features_per_month_end: 16
+# Thresholds excellent 12 / good 8 / needsImprovement 3, so:
+#   3 -> 50   6 -> 65   8 -> 75   10 -> 88   12+ -> 100
+# This is a COUNT, so it saturates fast — vf_itsm.py drives its whole volume
+# from these numbers rather than from a per-developer rate, otherwise a natural
+# issue volume (~200 features/month for 25 devs) pins the tile at 100.
+features_per_month_start: 5
+features_per_month_end: 12
 deploys_per_week_start: 4
 deploys_per_week_end: 14
 
