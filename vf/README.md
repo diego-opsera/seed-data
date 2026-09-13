@@ -34,6 +34,7 @@ vf/
       diag_catalog.py      Phase 0 — catalog + schema reachability
       diag_sources.py      Phase 0 — per-table verdict for every DVI source
       diag_dimensions.py   Phase 0 — replays the ETL's own dimension logic
+      check_roster.py      Phase 1 — roster identity gates + story arc
 ```
 
 ## Identity is the contract
@@ -43,12 +44,15 @@ whose identity fails `sharedIdentity.js`. A failure is **silent** — the develo
 `individuals[]`, which is the path that drives every dashboard tile once it is non-empty.
 
 So the roster in `config/entities.yaml` carries an explicit `email` per developer, and
-`generators.story.roster()` refuses to return it if any entry would be dropped. Validate any time:
+`generators.story.roster()` refuses to return it if any entry would be dropped. Validate from a
+notebook cell:
 
-```bash
-python3 -m vf.generators.identity_gates      # prints PASS/FAIL per developer
-python3 -m vf.generators.story               # prints the arc, roster and repo mapping
+```python
+exec(open("/tmp/seed-data/vf/notebooks/dvi/check_roster.py").read())
 ```
+
+That prints the story arc, the org/team/repo mapping, a PASS/FAIL line per developer with the display
+name the UI will render, and the roster as the generators will see it. It reads no Databricks tables.
 
 This is not theoretical: `generators/commits.py` never populates `commit_email`, so all 37,598
 `demo-acme-direct` commits already resolve to zero developers (BUGS.md #12).
@@ -72,7 +76,11 @@ notebook cell:
 exec(open("/tmp/seed-data/vf/notebooks/dvi/diag_catalog.py").read())
 exec(open("/tmp/seed-data/vf/notebooks/dvi/diag_sources.py").read())
 exec(open("/tmp/seed-data/vf/notebooks/dvi/diag_dimensions.py").read())
+exec(open("/tmp/seed-data/vf/notebooks/dvi/check_roster.py").read())
 ```
+
+Everything in this tree runs that way — from a notebook cell against `/tmp/seed-data`
+(`notebooks/clone.sh`). No local shell invocation.
 
 All three Phase 0 scripts are **read-only** — no INSERT, UPDATE, DELETE or CREATE. Safe to run against
 `playground_prod` at any time.
